@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube → GIF</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0c0f'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23ff6b4a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><span class="dot"></span> YouTube <span class="arrow">→</span> GIF</div>
+
+  <form class="loader" id="load-form" autocomplete="off">
+    <input id="url" type="url" placeholder="Paste a YouTube link…" spellcheck="false"
+           aria-label="YouTube URL">
+    <select id="max-height" aria-label="Download quality">
+      <option value="1080" selected>1080p</option>
+      <option value="720">720p</option>
+      <option value="480">480p</option>
+    </select>
+    <button id="load" type="submit">Load</button>
+  </form>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<main>
+  <!-- ─────────────────────────── stage ─────────────────────────── -->
+  <section class="stage">
+    <div class="viewport" id="viewport">
+      <video id="video" playsinline preload="auto"></video>
+      <canvas id="overlay" aria-label="Crop region — drag to draw"></canvas>
+
+      <div class="placeholder" id="placeholder">
+        <strong>Load a video to begin</strong>
+        <span>Then drag on the frame to choose exactly what the GIF shows.</span>
+      </div>
+
+      <div class="progress-veil" id="veil" hidden>
+        <div class="ring"></div>
+        <div class="veil-text" id="veil-text">Working…</div>
+        <div class="veil-bar"><i id="veil-fill"></i></div>
+      </div>
+    </div>
+
+    <div class="transport">
+      <button id="step-back" class="icon" type="button" aria-label="Previous frame" title="Previous frame (←)">◀|</button>
+      <button id="play" class="icon" type="button" aria-label="Play or pause" title="Play or pause (space)">▶</button>
+      <button id="step-fwd" class="icon" type="button" aria-label="Next frame" title="Next frame (→)">|▶</button>
+      <span class="clock"><b id="now">0:00.00</b> / <span id="total">0:00.00</span></span>
+      <label class="check"><input type="checkbox" id="loop" checked> Loop selection</label>
+      <span class="spacer"></span>
+      <button id="mark-in" class="ghost" type="button" title="Start the clip here (I)">Set in</button>
+      <button id="mark-out" class="ghost" type="button" title="End the clip here (O)">Set out</button>
+      <button id="zoom-fit" class="ghost" type="button" title="Zoom to the clip (F)">Fit clip</button>
+      <button id="zoom-all" class="ghost" type="button">Whole video</button>
+    </div>
+
+    <div class="track" id="track" role="group" aria-label="Clip selection">
+      <div class="scrub" id="scrub" title="Drag to preview the video"></div>
+      <div class="sel" id="sel" title="Drag to move the whole clip"></div>
+      <div class="handle" id="h-in" tabindex="0" role="slider" aria-label="Clip start"></div>
+      <div class="handle" id="h-out" tabindex="0" role="slider" aria-label="Clip end"></div>
+      <div class="playhead" id="playhead"><i class="knob"></i></div>
+    </div>
+
+    <p class="hint track-hint">Drag the marker — or anywhere in the strip along the top — to
+      preview. Drag inside the selection to move the whole clip, its ends to trim.</p>
+
+    <div class="clip-readout">
+      <span>In <b id="r-in">0:00.00</b></span>
+      <span>Out <b id="r-out">0:03.00</b></span>
+      <span>Length <b id="r-len">3.00 s</b></span>
+      <span>Frames <b id="r-frames">45</b></span>
+      <span>Plays for <b id="r-plays">3.00 s</b></span>
+      <span class="spacer"></span>
+      <span id="view-label"></span>
+    </div>
+
+    <!-- ───────────────────────── result ───────────────────────── -->
+    <section class="result" id="result">
+      <div class="result-head">
+        <div class="sizes">
+          <div class="size-block">
+            <label>Estimated</label>
+            <b id="est-size">—</b>
+            <small id="est-note">before rendering</small>
+          </div>
+          <div class="size-block done" id="actual-block" hidden>
+            <label>Actual</label>
+            <b id="act-size">—</b>
+            <small id="act-note"></small>
+          </div>
+        </div>
+        <div class="result-actions">
+          <button id="render" class="primary" type="button" disabled>Render GIF</button>
+          <a id="download" class="primary alt" hidden download>Download</a>
+        </div>
+      </div>
+
+      <div class="preview" id="preview" hidden>
+        <img id="gif" alt="Rendered GIF preview">
+        <div class="preview-meta" id="gif-meta"></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ────────────────────────── controls ────────────────────────── -->
+  <aside class="panel">
+    <section class="group">
+      <h2>Crop</h2>
+      <p class="hint" id="crop-hint">Drag on the video to draw a region. Drag inside to move, edges to resize.</p>
+      <div class="grid4">
+        <label>X <input type="number" id="crop-x" min="0" step="1"></label>
+        <label>Y <input type="number" id="crop-y" min="0" step="1"></label>
+        <label>W <input type="number" id="crop-w" min="2" step="1"></label>
+        <label>H <input type="number" id="crop-h" min="2" step="1"></label>
+      </div>
+      <div class="row wrap" id="crop-aspects" role="group" aria-label="Crop aspect ratio">
+        <button class="chip on" data-aspect="free" type="button">Free</button>
+        <button class="chip" data-aspect="1:1" type="button">1:1</button>
+        <button class="chip" data-aspect="4:5" type="button">4:5</button>
+        <button class="chip" data-aspect="16:9" type="button">16:9</button>
+        <button class="chip" data-aspect="9:16" type="button">9:16</button>
+      </div>
+      <button id="crop-reset" class="ghost" type="button">Full frame</button>
+    </section>
+
+    <section class="group">
+      <h2>Output size</h2>
+      <div class="grid2">
+        <label>Width <input type="number" id="out-w" min="16" max="1920" step="2"></label>
+        <label>Height <input type="number" id="out-h" min="16" max="1920" step="2"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="link-aspect" checked>
+        Keep the crop's aspect ratio</label>
+      <div class="row wrap" id="size-presets">
+        <button class="chip" data-w="240" type="button">240</button>
+        <button class="chip" data-w="320" type="button">320</button>
+        <button class="chip" data-w="480" type="button">480</button>
+        <button class="chip" data-w="640" type="button">640</button>
+        <button class="chip" data-w="800" type="button">800</button>
+      </div>
+      <p class="hint" id="scale-hint"></p>
+    </section>
+
+    <section class="group">
+      <h2>Motion</h2>
+      <label class="slider">Frame rate <output id="fps-out">15 fps</output>
+        <input type="range" id="fps" min="5" max="30" step="1" value="15">
+      </label>
+      <p class="hint" id="fps-hint">Higher is smoother but multiplies the file size almost linearly.</p>
+      <label class="slider">Playback speed <output id="speed-out">1.00×</output>
+        <input type="range" id="speed" min="0.25" max="4" step="0.05" value="1">
+      </label>
+      <label class="check"><input type="checkbox" id="boomerang">
+        Ping-pong (play forward, then back)</label>
+      <label class="check"><input type="checkbox" id="loop-forever" checked>
+        Loop forever</label>
+    </section>
+
+    <section class="group">
+      <h2>Quality</h2>
+      <div class="presets" id="presets" role="radiogroup" aria-label="Quality preset">
+        <button data-preset="max" type="button">Max detail</button>
+        <button data-preset="balanced" class="on" type="button">Balanced</button>
+        <button data-preset="small" type="button">Small</button>
+        <button data-preset="tiny" type="button">Tiny</button>
+      </div>
+      <label class="slider">Sharpen <output id="sharpen-out">0.0</output>
+        <input type="range" id="sharpen" min="0" max="2" step="0.1" value="0">
+      </label>
+      <p class="hint">Counteracts the softness that downscaling introduces. Costs
+        a little size, because fine detail is what compresses worst.</p>
+
+      <label class="check"><input type="checkbox" id="dedupe">
+        Drop duplicate frames</label>
+      <p class="hint" id="dedupe-hint">Removes repeated frames and stretches the remaining
+        delays, so static shots shrink without changing the playback speed.</p>
+
+      <details id="advanced">
+        <summary>Advanced</summary>
+        <label class="slider">Colours <output id="colors-out">200</output>
+          <input type="range" id="colors" min="8" max="256" step="8" value="200">
+        </label>
+        <label class="slider">Lossy compression <output id="lossy-out">40</output>
+          <input type="range" id="lossy" min="0" max="200" step="5" value="40">
+        </label>
+        <label>Dither
+          <select id="dither">
+            <option value="bayer">Bayer (compresses best)</option>
+            <option value="sierra2_4a">Sierra2 4A (most detail)</option>
+            <option value="floyd_steinberg">Floyd–Steinberg</option>
+            <option value="sierra2">Sierra2</option>
+            <option value="none">None (flat, smallest)</option>
+          </select>
+        </label>
+        <label class="slider">Bayer scale <output id="bayer-out">3</output>
+          <input type="range" id="bayer" min="0" max="5" step="1" value="3">
+        </label>
+        <button id="advanced-reset" class="ghost" type="button">Back to preset</button>
+      </details>
+    </section>
+
+    <section class="group">
+      <h2>Fit to a size</h2>
+      <div class="row">
+        <input type="number" id="target-mb" min="0.1" max="200" step="0.1" value="2"
+               aria-label="Target size in megabytes">
+        <span class="unit">MB</span>
+        <button id="fit" type="button" disabled>Fit</button>
+      </div>
+      <p class="hint" id="fit-note">Renders repeatedly, giving up lossy compression
+        first, then colours, then frame rate, and resolution only as a last resort.</p>
+    </section>
+
+    <section class="group meta" id="video-meta" hidden>
+      <h2>Source</h2>
+      <p id="meta-title"></p>
+      <p class="hint" id="meta-dims"></p>
+    </section>
+  </aside>
+</main>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
