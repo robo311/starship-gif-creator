@@ -1,6 +1,6 @@
 {
-  "name": "Cut to GIF · YouTube GIF maker",
-  "short_name": "Cut to GIF",
+  "name": "Starship · YouTube GIF maker",
+  "short_name": "Starship",
   "description": "Clip, crop, optimize, and download GIFs from YouTube videos.",
   "start_url": "/",
   "display": "standalone",
@@ -8,7 +8,7 @@
   "theme_color": "#171714",
   "icons": [
     {
-      "src": "/assets/cut-to-gif-icon.svg",
+      "src": "/assets/starship-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

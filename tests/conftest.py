@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 # app.py reads the cache location at import time, so it must be set first.
-_CACHE = Path(tempfile.mkdtemp(prefix="gye-tests-"))
-os.environ["GYE_CACHE_DIR"] = str(_CACHE)
+_CACHE = Path(tempfile.mkdtemp(prefix="starship-tests-"))
+os.environ["STARSHIP_CACHE_DIR"] = str(_CACHE)
 
 SYNTHETIC_ID = "testclip01"
 

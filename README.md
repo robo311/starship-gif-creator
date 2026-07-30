@@ -1,4 +1,4 @@
-# Cut to GIF
+# Starship
 
 **Make the moment loop.** Turn a YouTube link into a crisp, precisely cropped
 GIF: pick the clip, frame it by hand, tune motion and quality, see the expected
@@ -38,9 +38,9 @@ Everything runs on localhost. Nothing is uploaded anywhere.
    out past the frame stops the rectangle at the edge — what you draw is what
    gets encoded, to the pixel.
 3. **Pick the clip** on the track, which reads as two layers:
-   - the **hatched strip along the top** scrubs — drag the white marker, or
-     anywhere in the strip, to preview the video;
-   - the **orange selection** below it is the clip. Drag its body to move the
+   - the **strip along the top** scrubs — drag the white marker, or anywhere in
+     the strip, to preview the video;
+   - the **outlined selection** below it is the clip. Drag its body to move the
      whole thing without changing its length, its ends to trim.
 
    Scroll to zoom and shift-scroll to pan — necessary on a long video, where a
@@ -130,7 +130,13 @@ web/
   index.html
   css/app.css
   js/{api,state,crop,rect,timeline,estimate,main}.js
+  assets/fonts/  Satoshi + JetBrains Mono, vendored
 ```
+
+The two typefaces are served from `web/assets/fonts` rather than a CDN, so the
+interface looks the same with the network unplugged — the same promise the
+rendering makes. Satoshi is used for language, JetBrains Mono for every value
+the app measures, which is why numbers never reflow as they tick.
 
 `web/js/estimate.js` mirrors `server/estimate.py` so the readout can update
 instantly. The two are pinned together by `tests/test_estimate_parity.py`, which
@@ -159,4 +165,4 @@ sharpening and ping-pong.
   adding one would mean a freetype-enabled rebuild.
 - Clips are capped at 60 seconds. GIF is a poor container beyond that.
 - Long videos are downloaded in full before the preview appears; the quality
-  selector next to the URL box keeps that reasonable.
+  buttons next to the URL box keep that reasonable.

@@ -27,5 +27,5 @@ if [ ! -d .venv ]; then
   ./.venv/bin/pip install --quiet -r requirements.txt
 fi
 
-echo "Cut to GIF running at http://127.0.0.1:${PORT}"
+echo "Starship running at http://127.0.0.1:${PORT}"
 exec ./.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port "$PORT" "$@"

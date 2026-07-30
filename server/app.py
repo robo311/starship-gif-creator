@@ -18,7 +18,7 @@ from .jobs import registry
 from .models import PRESETS, RenderResult, RenderSpec, VideoMeta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CACHE_DIR = Path(os.environ.get("GYE_CACHE_DIR", BASE_DIR / "cache"))
+CACHE_DIR = Path(os.environ.get("STARSHIP_CACHE_DIR") or BASE_DIR / "cache")
 VIDEO_DIR = CACHE_DIR / "videos"
 GIF_DIR = CACHE_DIR / "gifs"
 WEB_DIR = BASE_DIR / "web"
@@ -27,7 +27,7 @@ REQUIRED_BINARIES = ["ffmpeg", "ffprobe", "yt-dlp", "gifsicle"]
 CHUNK = 512 * 1024
 
 app = FastAPI(
-    title="Cut to GIF API",
+    title="Starship API",
     description="Local YouTube-to-GIF rendering and optimization API.",
     docs_url="/api/docs",
 )

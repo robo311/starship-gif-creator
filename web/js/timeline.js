@@ -134,8 +134,6 @@ export function initTimeline({
     setView(start - margin, length + margin * 2);
   }
 
-  const showWhole = () => setView(0, total());
-
   // ── keyboard nudging, because dragging cannot hit an exact frame ───────
 
   for (const [element, which] of [[handleIn, 'in'], [handleOut, 'out']]) {
@@ -185,5 +183,5 @@ export function initTimeline({
     }
   }
 
-  return { render, fitClip, showWhole, MIN_CLIP, MAX_CLIP };
+  return { render, fitClip, MIN_CLIP, MAX_CLIP };
 }

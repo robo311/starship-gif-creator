@@ -204,7 +204,7 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
     // Size readout in source pixels, flipped inside the rect near the top edge.
     const crop = getCrop();
     const label = `${Math.round(crop.w * video.videoWidth)} × ${Math.round(crop.h * video.videoHeight)}`;
-    ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.font = '500 11px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
     const textWidth = ctx.measureText(label).width;
     const labelY = rect.y > 22 ? rect.y - 20 : rect.y + 4;
     ctx.fillStyle = 'oklch(14% 0.006 85 / 0.9)';

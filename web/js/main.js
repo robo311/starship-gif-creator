@@ -10,7 +10,7 @@ const el = (id) => document.getElementById(id);
 
 const dom = {
   form: el('load-form'), url: el('url'), pasteUrl: el('paste-url'),
-  maxHeight: el('max-height'), load: el('load'),
+  qualityPicks: el('quality-picks'), load: el('load'),
   banner: el('banner'), placeholder: el('placeholder'),
   stepLink: el('step-link'), stepEdit: el('step-edit'), stepExport: el('step-export'),
   studioTitle: el('studio-title'), themeToggle: el('theme-toggle'),
@@ -20,14 +20,15 @@ const dom = {
   play: el('play'), now: el('now'), total: el('total'), loop: el('loop'),
   stepBack: el('step-back'), stepFwd: el('step-fwd'),
   markIn: el('mark-in'), markOut: el('mark-out'),
-  zoomFit: el('zoom-fit'), zoomAll: el('zoom-all'), viewLabel: el('view-label'),
+  zoomFit: el('zoom-fit'), viewLabel: el('view-label'),
   track: el('track'), sel: el('sel'), hIn: el('h-in'), hOut: el('h-out'),
   playhead: el('playhead'), scrub: el('scrub'),
   rIn: el('r-in'), rOut: el('r-out'), rLen: el('r-len'), rFrames: el('r-frames'),
   rPlays: el('r-plays'),
   cropX: el('crop-x'), cropY: el('crop-y'), cropW: el('crop-w'), cropH: el('crop-h'),
   cropReset: el('crop-reset'), cropAspects: el('crop-aspects'), cropHint: el('crop-hint'),
-  outW: el('out-w'), outH: el('out-h'), linkAspect: el('link-aspect'),
+  cropSummary: el('crop-summary'), sizeSummary: el('size-summary'), motionSummary: el('motion-summary'),
+  outW: el('out-w'), outH: el('out-h'), linkAspect: el('link-aspect'), aspectNote: el('aspect-note'),
   sizePresets: el('size-presets'), scaleHint: el('scale-hint'),
   fps: el('fps'), fpsOut: el('fps-out'), fpsHint: el('fps-hint'),
   speed: el('speed'), speedOut: el('speed-out'),
@@ -40,8 +41,10 @@ const dom = {
   lossy: el('lossy'), lossyOut: el('lossy-out'),
   dither: el('dither'), bayer: el('bayer'), bayerOut: el('bayer-out'),
   advancedReset: el('advanced-reset'),
-  estSize: el('est-size'), estNote: el('est-note'),
+  estSize: el('est-size'), estNote: el('est-note'), weightFill: el('weight-fill'),
   actualBlock: el('actual-block'), actSize: el('act-size'), actNote: el('act-note'),
+  actualFill: el('actual-fill'),
+  resultTitle: el('export-title'),
   renderBtn: el('render'), renderLabel: document.querySelector('#render .button-label'),
   download: el('download'), copyGif: el('copy-gif'),
   preview: el('preview'), gif: el('gif'), gifMeta: el('gif-meta'),
@@ -53,16 +56,48 @@ const dom = {
 
 const evenize = (value) => Math.max(16, Math.round(value / 2) * 2);
 
+/** The requested download quality, from the segmented control. */
+const sourceHeight = () => Number(dom.qualityPicks.querySelector('input:checked')?.value || 1080);
+
+/** Write a formatted size as a big number with a small unit beside it.
+ *  Anything that is not "<number> <unit>" is left as plain text. */
+function writeSize(node, text) {
+  const parts = String(text).split(' ');
+  const measured = parts.length === 2 && Number.isFinite(Number(parts[0]));
+  node.textContent = measured ? parts[0] : text;
+  node.classList.toggle('plain', !measured);
+  if (!measured) return;
+  const unit = document.createElement('i');
+  unit.textContent = parts[1];
+  node.append(unit);
+}
+
+/** Fill a weight meter, measuring the size against the user's own limit. */
+function setMeter(node, ratio) {
+  node.style.setProperty('--fill', `${Math.max(4, Math.min(100, ratio * 100))}%`);
+  node.classList.toggle('over', ratio > 1);
+}
+
+/** Paint the travelled part of every slider: the browser will not do it alone. */
+function syncRanges() {
+  for (const range of document.querySelectorAll('input[type=range]')) {
+    const min = Number(range.min || 0);
+    const max = Number(range.max || 100);
+    const span = max - min;
+    range.style.setProperty('--pct', `${span > 0 ? ((Number(range.value) - min) / span) * 100 : 0}%`);
+  }
+}
+
 function setTheme(theme, remember = true) {
   const light = theme === 'light';
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
   dom.themeToggle.setAttribute('aria-pressed', String(light));
   dom.themeToggle.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
   dom.themeToggle.title = light ? 'Switch to dark mode' : 'Switch to light mode';
-  dom.themeColor.content = light ? '#f4f4f5' : '#101011';
+  dom.themeColor.content = light ? '#f1efec' : '#0c0c0d';
   if (remember) {
     try {
-      localStorage.setItem('cut-to-gif-theme', light ? 'light' : 'dark');
+      localStorage.setItem('starship-theme', light ? 'light' : 'dark');
     } catch {}
   }
 }
@@ -189,7 +224,7 @@ dom.form.addEventListener('submit', async (event) => {
   veil(2, 'Contacting YouTube');
 
   try {
-    const { job_id } = await startLoad(url, Number(dom.maxHeight.value));
+    const { job_id } = await startLoad(url, sourceHeight());
     const meta = await awaitJob(job_id, veil);
 
     dom.video.src = meta.stream_url;
@@ -282,7 +317,6 @@ const stepFrame = (direction) => {
 dom.stepBack.addEventListener('click', () => stepFrame(-1));
 dom.stepFwd.addEventListener('click', () => stepFrame(1));
 dom.zoomFit.addEventListener('click', () => timeline.fitClip());
-dom.zoomAll.addEventListener('click', () => timeline.showWhole());
 
 // Shortcuts, but never while the user is typing into a field.
 document.addEventListener('keydown', (event) => {
@@ -501,8 +535,13 @@ function paint() {
         : 'Render GIF';
 
   dom.studioTitle.textContent = loaded ? 'Frame it. Trim it. Make it loop.' : 'Catch the part worth replaying.';
+  dom.resultTitle.textContent = !loaded
+    ? 'Load a video to unlock this.'
+    : complete && !resultIsStale
+      ? 'Your loop is ready.'
+      : 'Ready when your loop is.';
   dom.panelStatus.className = `panel-status ${loaded ? 'ready' : 'waiting'}`;
-  dom.panelStatus.innerHTML = loaded ? '<i></i> Ready to tune' : '<i></i> Waiting for video';
+  dom.panelStatus.innerHTML = loaded ? '<i></i> Ready to tune' : '<i></i> Waiting for a video';
 
   for (const step of [dom.stepLink, dom.stepEdit, dom.stepExport]) {
     step.classList.remove('current', 'done');
@@ -541,12 +580,17 @@ function paint() {
   }
   dom.cropHint.textContent = pixels
     ? `Cropping ${pixels.width} × ${pixels.height} from ${state.video.width} × ${state.video.height}. Double-click the frame to clear.`
-    : 'Drag on the video to draw a region. Drag inside to move, edges to resize.';
+    : 'Drag on the video to draw a region. Drag inside to move it, grab an edge to resize.';
 
   // output size
   if (document.activeElement !== dom.outW) dom.outW.value = state.outWidth;
   if (document.activeElement !== dom.outH) dom.outH.value = state.outHeight;
   dom.outH.disabled = state.linkAspect;
+  dom.linkAspect.checked = state.linkAspect;
+  dom.aspectNote.textContent = state.linkAspect
+    ? 'Locked to the crop’s aspect ratio.'
+    : 'Width and height move on their own.';
+  dom.sizeSummary.textContent = `${state.outWidth}×${state.outHeight}`;
   for (const chip of dom.sizePresets.children) {
     chip.classList.toggle('on', Number(chip.dataset.w) === state.desiredWidth);
   }
@@ -568,6 +612,13 @@ function paint() {
       : Math.abs((state.cropAspect ?? -1) - w / h) < 0.001);
   }
 
+  // The collapsed group headers carry the value, so nothing has to be reopened
+  // to see where a dial was left.
+  const activeAspect = [...dom.cropAspects.children].find((chip) => chip.classList.contains('on'));
+  dom.cropSummary.textContent = pixels
+    ? `${pixels.width}×${pixels.height}`
+    : activeAspect?.dataset.aspect || 'free';
+
   // motion — never offer more frames per second than the source contains
   const fpsCeiling = loaded ? Math.min(30, sourceFps()) : 30;
   dom.fps.max = fpsCeiling;
@@ -581,6 +632,7 @@ function paint() {
   dom.speedOut.textContent = `${state.speed.toFixed(2)}×`;
   dom.boomerang.checked = state.boomerang;
   dom.loopForever.checked = state.loopForever;
+  dom.motionSummary.textContent = `${state.fps} fps · ${state.speed.toFixed(2)}×`;
 
   // quality
   const active = settings();
@@ -594,9 +646,7 @@ function paint() {
   for (const button of dom.presets.children) {
     button.classList.toggle('on', button.dataset.preset === state.preset);
   }
-  dom.qualitySummary.textContent = state.preset === 'max'
-    ? 'Max detail'
-    : state.preset.charAt(0).toUpperCase() + state.preset.slice(1);
+  dom.qualitySummary.textContent = state.preset === 'max' ? 'max detail' : state.preset;
   dom.colors.value = active.colors;
   dom.colorsOut.textContent = active.colors;
   dom.lossy.value = active.lossy;
@@ -609,7 +659,9 @@ function paint() {
   // estimate — meaningless until there is a video to measure against
   const bpp = bitsPerPixel({ ...active, sharpen: state.sharpen });
   const predicted = estimateBytes(state.outWidth, state.outHeight, frames, bpp, state.calibration);
-  dom.estSize.textContent = loaded ? formatBytes(predicted) : 'Not ready';
+  const limitBytes = state.targetMB * 1024 * 1024;
+  writeSize(dom.estSize, loaded ? formatBytes(predicted) : 'Not ready');
+  setMeter(dom.weightFill, loaded ? predicted / limitBytes : 0.08);
   dom.estNote.textContent = !loaded
     ? 'load a video first'
     : state.calibration
@@ -636,7 +688,8 @@ function paint() {
   dom.download.hidden = !result;
   dom.copyGif.hidden = !result;
   if (result) {
-    dom.actSize.textContent = formatBytes(result.bytes);
+    writeSize(dom.actSize, formatBytes(result.bytes));
+    setMeter(dom.actualFill, result.bytes / limitBytes);
     const saved = result.bytes_before_optimize
       ? Math.round((1 - result.bytes / result.bytes_before_optimize) * 100)
       : 0;
@@ -665,6 +718,8 @@ function paint() {
     dom.metaTitle.textContent = state.video.title;
     dom.metaDims.textContent = `${state.video.width} × ${state.video.height} · ${state.video.fps} fps · ${formatTime(state.video.duration)}`;
   }
+
+  syncRanges();
 }
 
 subscribe(paint);

@@ -3,25 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cut to GIF · YouTube GIF maker</title>
-<meta name="description" content="Turn any YouTube moment into a crisp, precisely cropped GIF. Trim, resize, optimize, preview, and download locally with Cut to GIF.">
+<title>Starship · YouTube GIF maker</title>
+<meta name="description" content="Turn any YouTube moment into a crisp, precisely cropped GIF. Trim, resize, optimize, preview, and download locally with Starship.">
 <meta name="keywords" content="YouTube to GIF, GIF maker, video to GIF, crop GIF, animated GIF creator">
-<meta name="application-name" content="Cut to GIF">
-<meta name="theme-color" id="theme-color" content="#101011">
+<meta name="application-name" content="Starship">
+<meta name="theme-color" id="theme-color" content="#0c0c0d">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Cut to GIF · YouTube GIF maker">
+<meta property="og:title" content="Starship · YouTube GIF maker">
 <meta property="og:description" content="A precise, private YouTube to GIF studio for clipping, cropping, and optimizing the moments worth repeating.">
-<meta property="og:image" content="/assets/cut-to-gif-social.svg">
+<meta property="og:image" content="/assets/starship-social.svg">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Cut to GIF · YouTube GIF maker">
+<meta name="twitter:title" content="Starship · YouTube GIF maker">
 <meta name="twitter:description" content="Cut a precise moment from YouTube and turn it into an optimized GIF.">
-<meta name="twitter:image" content="/assets/cut-to-gif-social.svg">
-<link rel="icon" href="/assets/cut-to-gif-icon.svg" type="image/svg+xml">
+<meta name="twitter:image" content="/assets/starship-social.svg">
+<link rel="icon" href="/assets/starship-icon.svg" type="image/svg+xml">
 <link rel="manifest" href="/site.webmanifest">
 <script>
 try {
-  if (localStorage.getItem('cut-to-gif-theme') === 'light') {
+  if (localStorage.getItem('starship-theme') === 'light') {
     document.documentElement.dataset.theme = 'light';
   }
 } catch {}
@@ -31,7 +31,7 @@ try {
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Cut to GIF",
+  "name": "Starship",
   "applicationCategory": "MultimediaApplication",
   "operatingSystem": "Web",
   "description": "A local YouTube to GIF maker with precise trimming, cropping, quality controls, file-size estimates, and optimized downloads.",
@@ -52,16 +52,26 @@ try {
 </head>
 <body>
 
+<!-- Depth: slow, near-invisible movement behind everything. Decorative only. -->
+<div class="depth" aria-hidden="true">
+  <i class="drift drift-a"></i>
+  <i class="drift drift-b"></i>
+  <i class="drift drift-c"></i>
+  <span class="mesh"></span>
+  <span class="sweep"></span>
+</div>
+
 <header class="topbar">
-  <a class="brand" href="/" aria-label="Cut to GIF home">
+  <a class="brand" href="/" aria-label="Starship home">
     <span class="brand-mark" aria-hidden="true">
       <svg viewBox="0 0 24 24">
-        <rect class="video-shape" x="3.25" y="4.25" width="17.5" height="15.5" rx="4"/>
-        <path class="play-shape" d="m10 8.75 6 3.25-6 3.25Z"/>
+        <path class="rocket-shape" d="M13.2 4.2c2.2-1.5 4.6-1.3 6.6-1-0.1 2.1-0.5 4.5-2.4 6.4l-4.7 4.7-3-3 3.5-7.1Z"/>
+        <circle class="rocket-window" cx="15.9" cy="7.1" r="1.45"/>
+        <path class="rocket-detail" d="m10.1 8.8-3.6.3-2.2 2.2 4.4.5m6.5-.7-.3 3.6-2.2 2.2-.5-4.4M8.8 14.2c-2.5.4-3.5 1.4-3.9 4 2.5-.4 3.6-1.4 3.9-4Z"/>
       </svg>
     </span>
     <span class="brand-copy">
-      <strong>Cut to GIF</strong>
+      <strong>Starship</strong>
     </span>
   </a>
 
@@ -116,14 +126,12 @@ try {
                  aria-label="YouTube URL" inputmode="url">
           <button id="paste-url" class="paste-action" type="button">Paste</button>
         </div>
-        <label class="quality-select">
-          <span>Source</span>
-          <select id="max-height" aria-label="Download quality">
-            <option value="1080" selected>1080p</option>
-            <option value="720">720p</option>
-            <option value="480">480p</option>
-          </select>
-        </label>
+        <fieldset class="quality-picks" id="quality-picks">
+          <legend>Source quality</legend>
+          <label class="seg"><input type="radio" name="max-height" value="480"><span>480p</span></label>
+          <label class="seg"><input type="radio" name="max-height" value="720"><span>720p</span></label>
+          <label class="seg"><input type="radio" name="max-height" value="1080" checked><span>1080p</span></label>
+        </fieldset>
         <button id="load" class="load-action" type="submit">
           <span>Load video</span>
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m7 4 6 6-6 6"/></svg>
@@ -144,8 +152,8 @@ try {
                 <path class="play-shape" d="m20 16 13 8-13 8Z"/>
               </svg>
             </div>
-            <strong>Your loop starts here</strong>
-            <span>Paste a YouTube link above, then shape the moment frame by frame.</span>
+            <strong>Your loop starts here.</strong>
+            <span>Drop a link above and we pull the frames down to your machine. Nothing gets uploaded.</span>
             <div class="empty-steps" aria-hidden="true">
               <b>Clip</b><i></i><b>Crop</b><i></i><b>Loop</b>
             </div>
@@ -173,13 +181,12 @@ try {
           </button>
         </div>
         <span class="clock"><b id="now">0:00.00</b><i>/</i><span id="total">0:00.00</span></span>
-        <label class="check loop-check"><input type="checkbox" id="loop" checked><span>Loop selection</span></label>
+        <label class="check loop-check"><input type="checkbox" id="loop" checked><span>Loop the selection</span></label>
         <span class="spacer"></span>
         <div class="mark-controls" role="group" aria-label="Clip marks">
           <button id="mark-in" class="quiet-button" type="button" title="Start the clip here (I)">Set in <kbd>I</kbd></button>
           <button id="mark-out" class="quiet-button" type="button" title="End the clip here (O)">Set out <kbd>O</kbd></button>
-          <button id="zoom-fit" class="quiet-button" type="button" title="Zoom to the clip (F)">Fit clip</button>
-          <button id="zoom-all" class="quiet-button" type="button">Show all</button>
+          <button id="zoom-fit" class="quiet-button" type="button" title="Zoom to the clip (F)">Fit clip <kbd>F</kbd></button>
         </div>
       </div>
 
@@ -201,25 +208,27 @@ try {
           <span class="spacer"></span>
           <span id="view-label" class="view-label"></span>
         </div>
-        <p class="hint track-hint">Drag the top strip to preview. Move the orange selection, or trim from either end. Scroll to zoom.</p>
+        <p class="hint track-hint">Drag the top strip to scrub. Move the selection, or trim from either end. Scroll to zoom, shift-scroll to pan.</p>
       </div>
     </div>
 
     <section class="result" id="result" aria-labelledby="export-title">
       <div class="result-copy">
         <h2 id="export-title">Ready when your loop is.</h2>
-        <p>The first estimate is a smart guess. After one render, the estimate learns from this clip and gets more precise.</p>
+        <p>Weight is an educated guess until the first render — then it learns your clip and gets sharper.</p>
       </div>
 
       <div class="sizes">
         <div class="size-block">
-          <label>Estimated size</label>
+          <label>Estimated weight</label>
           <b id="est-size">Not ready</b>
+          <div class="weight-meter" aria-hidden="true"><i id="weight-fill"></i></div>
           <small id="est-note">load a video first</small>
         </div>
         <div class="size-block done" id="actual-block" hidden>
-          <label>Actual size</label>
+          <label>Actual weight</label>
           <b id="act-size">Not ready</b>
+          <div class="weight-meter" aria-hidden="true"><i id="actual-fill"></i></div>
           <small id="act-note"></small>
         </div>
       </div>
@@ -245,45 +254,57 @@ try {
 
   <aside class="panel" aria-label="GIF settings">
     <div class="panel-head">
-      <h2>Shape your loop</h2>
-      <span class="panel-status" id="panel-status"><i></i> Waiting for video</span>
+      <div class="panel-title">
+        <h2>Shape your loop</h2>
+        <p>Four dials. Nothing else to learn.</p>
+      </div>
+      <span class="panel-status" id="panel-status"><i></i> Waiting for a video</span>
     </div>
 
     <details class="group" open>
       <summary>
         <span><b>01</b> Frame &amp; crop</span>
+        <em id="crop-summary">free</em>
         <i aria-hidden="true"></i>
       </summary>
       <div class="group-body">
         <p class="hint" id="crop-hint">Load a video, then drag on it to frame the part you want.</p>
         <div class="aspect-picks" id="crop-aspects" role="group" aria-label="Crop aspect ratio">
-          <button class="aspect-pick on" data-aspect="free" type="button"><b>Free</b><span>Any shape</span></button>
+          <button class="aspect-pick on" data-aspect="free" type="button"><b>Free</b><span>any</span></button>
           <button class="aspect-pick" data-aspect="1:1" type="button"><b>Square</b><span>1:1</span></button>
           <button class="aspect-pick" data-aspect="4:5" type="button"><b>Portrait</b><span>4:5</span></button>
           <button class="aspect-pick" data-aspect="16:9" type="button"><b>Wide</b><span>16:9</span></button>
           <button class="aspect-pick" data-aspect="9:16" type="button"><b>Story</b><span>9:16</span></button>
         </div>
         <div class="field-grid grid4">
-          <label><span>X</span><input type="number" id="crop-x" min="0" step="1"></label>
-          <label><span>Y</span><input type="number" id="crop-y" min="0" step="1"></label>
-          <label><span>Width</span><input type="number" id="crop-w" min="2" step="1"></label>
-          <label><span>Height</span><input type="number" id="crop-h" min="2" step="1"></label>
+          <label><span>X</span><input type="number" id="crop-x" min="0" step="1" placeholder="—" aria-label="Crop X"></label>
+          <label><span>Y</span><input type="number" id="crop-y" min="0" step="1" placeholder="—" aria-label="Crop Y"></label>
+          <label><span>W</span><input type="number" id="crop-w" min="2" step="1" placeholder="—" aria-label="Crop width"></label>
+          <label><span>H</span><input type="number" id="crop-h" min="2" step="1" placeholder="—" aria-label="Crop height"></label>
         </div>
-        <button id="crop-reset" class="text-action" type="button">Use full frame</button>
+        <button id="crop-reset" class="text-action" type="button">Use the full frame</button>
       </div>
     </details>
 
     <details class="group" open>
       <summary>
         <span><b>02</b> Output size</span>
+        <em id="size-summary">480×270</em>
         <i aria-hidden="true"></i>
       </summary>
       <div class="group-body">
-        <div class="field-grid grid2">
-          <label><span>Width</span><input type="number" id="out-w" min="16" max="1920" step="2"></label>
-          <label><span>Height</span><input type="number" id="out-h" min="16" max="1920" step="2"></label>
+        <div class="size-fields">
+          <label class="size-field"><span>Width</span><input type="number" id="out-w" min="16" max="1920" step="2"></label>
+          <label class="lock-toggle" title="Keep the crop’s aspect ratio">
+            <input type="checkbox" id="link-aspect" checked>
+            <i aria-hidden="true">
+              <svg viewBox="0 0 20 20"><rect class="lock-frame" x="3.5" y="5.5" width="13" height="9" rx="2.5"/><path class="lock-link" d="M7.5 10h5"/></svg>
+            </i>
+            <span>Keep the crop’s aspect ratio</span>
+          </label>
+          <label class="size-field"><span>Height</span><input type="number" id="out-h" min="16" max="1920" step="2"></label>
         </div>
-        <label class="check"><input type="checkbox" id="link-aspect" checked><span>Keep the crop’s aspect ratio</span></label>
+        <p class="hint" id="aspect-note">Locked to the crop’s aspect ratio.</p>
         <div class="chip-row" id="size-presets" aria-label="Output width presets">
           <button class="chip" data-w="240" type="button">240</button>
           <button class="chip" data-w="320" type="button">320</button>
@@ -298,31 +319,33 @@ try {
     <details class="group" open>
       <summary>
         <span><b>03</b> Motion</span>
+        <em id="motion-summary">15 fps · 1.00×</em>
         <i aria-hidden="true"></i>
       </summary>
       <div class="group-body">
         <label class="slider">
-          <span>Frame rate <small>Smoothness</small></span>
+          <span>Frame rate <small>smoothness</small></span>
           <output id="fps-out">15 fps</output>
           <input type="range" id="fps" min="5" max="30" step="1" value="15">
         </label>
+        <div class="slider-ticks" aria-hidden="true"><span>8</span><span>12</span><span>15</span><span>24</span><span>30</span></div>
         <p class="hint" id="fps-hint">Higher is smoother, but increases file size.</p>
         <label class="slider">
-          <span>Playback speed <small>Tempo</small></span>
+          <span>Playback speed <small>tempo</small></span>
           <output id="speed-out">1.00×</output>
           <input type="range" id="speed" min="0.25" max="4" step="0.05" value="1">
         </label>
         <div class="toggle-row">
           <label class="switch"><input type="checkbox" id="boomerang"><i></i><span><b>Ping-pong</b><small>Play forward, then back</small></span></label>
-          <label class="switch"><input type="checkbox" id="loop-forever" checked><i></i><span><b>Loop forever</b><small>Keep it moving</small></span></label>
+          <label class="switch"><input type="checkbox" id="loop-forever" checked><i></i><span><b>Loop forever</b><small>Never stops, never asks</small></span></label>
         </div>
       </div>
     </details>
 
     <details class="group">
       <summary>
-        <span><b>04</b> Quality</span>
-        <em id="quality-summary">Balanced</em>
+        <span><b>04</b> Look &amp; weight</span>
+        <em id="quality-summary">balanced</em>
         <i aria-hidden="true"></i>
       </summary>
       <div class="group-body">
@@ -369,7 +392,7 @@ try {
     <details class="group size-fit">
       <summary>
         <span><b>05</b> Fit a file limit</span>
-        <em>Smart</em>
+        <em>smart</em>
         <i aria-hidden="true"></i>
       </summary>
       <div class="group-body">

@@ -38,20 +38,20 @@ def test_health_reports_the_tools_and_the_size_model(client):
 def test_index_page_is_served(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "Cut to GIF" in response.text
+    assert "Starship" in response.text
     assert "application/ld+json" in response.text
 
 
 def test_brand_and_discovery_assets_are_served(client):
     manifest = client.get("/site.webmanifest")
     assert manifest.status_code == 200
-    assert manifest.json()["short_name"] == "Cut to GIF"
+    assert manifest.json()["short_name"] == "Starship"
 
     robots = client.get("/robots.txt")
     assert robots.status_code == 200
     assert "Allow: /" in robots.text
 
-    icon = client.get("/assets/cut-to-gif-icon.svg")
+    icon = client.get("/assets/starship-icon.svg")
     assert icon.status_code == 200
     assert icon.headers["content-type"].startswith("image/svg+xml")
 
