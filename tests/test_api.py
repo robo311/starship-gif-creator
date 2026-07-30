@@ -102,6 +102,25 @@ def test_video_is_served_whole_and_advertises_range_support(client):
     assert len(response.content) > 1000
 
 
+def test_source_video_can_be_downloaded_with_a_friendly_filename(client):
+    response = client.get(
+        f"/api/video/{SYNTHETIC_ID}",
+        params={"download": 1, "filename": "my-favourite-video"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == 'attachment; filename="my-favourite-video.mp4"'
+    assert response.headers["content-type"] == "video/mp4"
+    assert len(response.content) > 1000
+
+
+def test_source_video_download_rejects_a_hostile_filename(client):
+    response = client.get(
+        f"/api/video/{SYNTHETIC_ID}",
+        params={"download": 1, "filename": "../../not-my-video.mp4"},
+    )
+    assert response.headers["content-disposition"] == f'attachment; filename="{SYNTHETIC_ID}.mp4"'
+
+
 def test_range_request_returns_exactly_the_requested_slice(client):
     whole = client.get(f"/api/video/{SYNTHETIC_ID}").content
     response = client.get(f"/api/video/{SYNTHETIC_ID}", headers={"Range": "bytes=10-109"})

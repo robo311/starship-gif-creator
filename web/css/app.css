@@ -1721,7 +1721,7 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   border-bottom: 5px solid transparent;
   border-left: 8px solid var(--accent);
 }
-.source-meta > div { min-width: 0; }
+.source-details { min-width: 0; flex: 1 1 auto; }
 .source-meta small {
   color: var(--muted);
   font: 400 8.5px/1 var(--mono);
@@ -1737,7 +1737,35 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   font-size: 12px;
   font-weight: 500;
 }
-.source-meta div > span { color: var(--muted); font: 400 9.5px/1 var(--mono); }
+.source-details > span { color: var(--muted); font: 400 9.5px/1 var(--mono); }
+.source-download {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  color: var(--text-soft);
+  background: var(--surface);
+  text-decoration: none;
+  transition: color 180ms ease, background 180ms ease, transform 180ms var(--ease-out);
+}
+.source-download:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+.source-download svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.source-download span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 /* ── motion ──────────────────────────────────────────────────────────── */
 

@@ -50,6 +50,7 @@ const dom = {
   preview: el('preview'), gif: el('gif'), gifMeta: el('gif-meta'),
   panelStatus: el('panel-status'), videoMeta: el('video-meta'),
   metaTitle: el('meta-title'), metaDims: el('meta-dims'),
+  downloadVideo: el('download-video'),
 };
 
 // ── small helpers ────────────────────────────────────────────────────────
@@ -717,6 +718,10 @@ function paint() {
   if (loaded) {
     dom.metaTitle.textContent = state.video.title;
     dom.metaDims.textContent = `${state.video.width} × ${state.video.height} · ${state.video.fps} fps · ${formatTime(state.video.duration)}`;
+    const videoName = slug(state.video.title);
+    const separator = state.video.stream_url.includes('?') ? '&' : '?';
+    dom.downloadVideo.href = `${state.video.stream_url}${separator}download=1&filename=${encodeURIComponent(videoName)}`;
+    dom.downloadVideo.setAttribute('download', videoName);
   }
 
   syncRanges();

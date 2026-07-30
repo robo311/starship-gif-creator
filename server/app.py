@@ -283,8 +283,32 @@ def fit_to_target(body: FitRequest) -> dict:
 
 
 @app.get("/api/video/{video_id}")
-def video(video_id: str, request: Request) -> Response:
+def video(
+    video_id: str,
+    request: Request,
+    download: int = 0,
+    filename: str = "",
+) -> Response:
     path, _ = _source_for(video_id)
+    if download:
+        # The UI only knows the video title, not whether yt-dlp cached an MP4,
+        # WebM, or MKV. Let it supply a safe stem and preserve the real suffix.
+        stem = filename.strip()
+        known_suffix = Path(stem).suffix.lower()
+        if known_suffix in (".mp4", ".mkv", ".webm"):
+            stem = stem[: -len(known_suffix)]
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}", stem):
+            stem = video_id
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+            "Content-Disposition": f'attachment; filename="{stem}{path.suffix.lower()}"',
+        }
+        return FileResponse(
+            path,
+            media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            headers=headers,
+        )
     return _ranged_file(path, request)
 
 
