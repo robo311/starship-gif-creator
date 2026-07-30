@@ -1,7 +1,7 @@
 {
-  "name": "Starship · YouTube GIF maker",
+  "name": "Starship · Video link GIF maker",
   "short_name": "Starship",
-  "description": "Clip, crop, optimize, and download GIFs from YouTube videos.",
+  "description": "Clip, crop, optimize, and download GIFs from YouTube, Twitter/X, Instagram Reels, TikTok, and other supported video links.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#171714",

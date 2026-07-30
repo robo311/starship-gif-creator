@@ -40,6 +40,7 @@ def test_index_page_is_served(client):
     assert response.status_code == 200
     assert "Starship" in response.text
     assert "application/ld+json" in response.text
+    assert 'data-size="auto"' in response.text
 
 
 def test_brand_and_discovery_assets_are_served(client):

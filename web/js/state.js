@@ -14,6 +14,7 @@ export const state = {
   desiredHeight: 270,
   outWidth: 480,
   outHeight: 270,
+  autoSize: false,      // keep output at the source/crop region's native resolution
   crop: null,           // normalised {x, y, w, h} in 0..1, or null for full frame
   cropAspect: null,     // number to constrain crop drags to, or null for free
   linkAspect: true,     // output follows the crop's aspect ratio

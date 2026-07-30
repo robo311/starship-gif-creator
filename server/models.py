@@ -37,6 +37,7 @@ class Crop(BaseModel):
 
 class VideoMeta(BaseModel):
     id: str
+    provider: str = ""
     title: str = ""
     url: str = ""
     duration: float = 0.0

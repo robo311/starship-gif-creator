@@ -1,8 +1,9 @@
 # Starship
 
-**Make the moment loop.** Turn a YouTube link into a crisp, precisely cropped
-GIF: pick the clip, frame it by hand, tune motion and quality, see the expected
-size before committing, then download or copy the result.
+**Make the moment loop.** Turn a YouTube, Twitter/X, Instagram Reel, TikTok, or
+other supported video link into a crisp, precisely cropped GIF: pick the clip,
+frame it by hand, tune motion and quality, see the expected size before
+committing, then download or copy the result.
 
 ```bash
 ./run.sh          # → http://127.0.0.1:8420
@@ -20,13 +21,30 @@ message if any of the three binaries is missing.
 
 ## Why there is a backend
 
-YouTube's iframe player is cross-origin and DRM-protected, so a browser cannot
-read its pixels into a canvas and certainly cannot re-encode them. Making a GIF
-from a URL therefore requires fetching the real video (`yt-dlp`) and re-encoding
-it (`ffmpeg`) outside the page. The browser then previews the *locally cached*
-MP4, which is what makes the crop overlay and frame-accurate scrubbing possible.
+Embedded players are cross-origin, so a browser cannot read their pixels into a
+canvas and re-encode them. Making a GIF from a URL therefore requires fetching
+the real video (`yt-dlp`) and re-encoding it (`ffmpeg`) outside the page. The
+browser then previews the *locally cached* file, which is what makes the crop
+overlay and frame-accurate scrubbing possible.
 
 Everything runs on localhost. Nothing is uploaded anywhere.
+
+Starship explicitly recognizes YouTube, public Twitter/X posts, Instagram
+Reels, and canonical TikTok video URLs for instant cache lookups. TikTok short
+links and other video pages supported by the installed `yt-dlp` version use the
+same workflow after metadata is read.
+
+There is no Starship account or login system. Public posts work directly. For a
+post visible only to an existing local browser session, browser-cookie reuse is
+available as an explicit opt-in:
+
+```bash
+STARSHIP_COOKIES_FROM_BROWSER=chrome ./run.sh
+# Also supported by yt-dlp: safari, firefox, or a browser/profile spec.
+```
+
+Without that setting, or when the selected session cannot access the post, the
+app reports that it may be private, removed, or require login.
 
 ## Using it
 
@@ -119,7 +137,8 @@ arithmetic and the measurements behind its constants are in
 ```
 server/
   app.py         HTTP routes only
-  youtube.py     URL → cached local MP4
+  sources.py     provider URL → cached local video
+  youtube.py     compatibility aliases for the former module name
   gif.py         the ffmpeg and gifsicle pipeline
   fit.py         the target-size search
   estimate.py    size arithmetic, no I/O
@@ -152,12 +171,12 @@ browser.
 ./.venv/bin/python -m pytest tests -q
 ```
 
-137 tests, no network required — a synthetic `ffmpeg` test pattern stands in for
-YouTube. They cover the size arithmetic, the exact ffmpeg argument lists, the
-crop geometry (including that a drag off the edge truncates rather than sliding),
-HTTP Range handling (which video seeking depends on), the target-size search
-against an injected fake renderer, and real end-to-end renders including speed,
-sharpening and ping-pong.
+154 tests, no network required — a synthetic `ffmpeg` test pattern stands in for
+online providers. They cover URL/provider cache IDs, the size arithmetic, the
+exact ffmpeg argument lists, the crop geometry (including that a drag off the
+edge truncates rather than sliding), HTTP Range handling (which video seeking
+depends on), the target-size search against an injected fake renderer, and real
+end-to-end renders including speed, sharpening and ping-pong.
 
 ## Known limits
 

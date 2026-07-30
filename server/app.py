@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import estimate, fit, gif, media, youtube
+from . import estimate, fit, gif, media, sources
 from .jobs import registry
 from .models import PRESETS, RenderResult, RenderSpec, VideoMeta
 
@@ -28,7 +28,7 @@ CHUNK = 512 * 1024
 
 app = FastAPI(
     title="Starship API",
-    description="Local YouTube-to-GIF rendering and optimization API.",
+    description="Local video-link-to-GIF rendering and optimization API.",
     docs_url="/api/docs",
 )
 
@@ -43,9 +43,9 @@ _probe_cache: dict[str, media.Probe] = {}
 
 
 def _source_for(video_id: str) -> tuple[Path, media.Probe]:
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", video_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", video_id):
         raise HTTPException(400, "Malformed video id.")
-    path = youtube.cached_video(VIDEO_DIR, video_id)
+    path = sources.cached_video(VIDEO_DIR, video_id)
     if path is None:
         raise HTTPException(404, "That video is not loaded. Load the URL first.")
     if video_id not in _probe_cache:
@@ -58,7 +58,7 @@ def _spawn(target, job_id: str) -> None:
         try:
             target()
         except Exception as exc:  # surfaced verbatim to the UI
-            registry.fail(job_id, str(exc))
+            registry.fail(job_id, sources.public_error_message(exc))
 
     threading.Thread(target=runner, daemon=True).start()
 
@@ -166,7 +166,7 @@ def health() -> dict:
 def load(body: LoadRequest) -> dict:
     url = body.url.strip()
     if not url:
-        raise HTTPException(400, "Paste a YouTube URL first.")
+        raise HTTPException(400, "Paste a video URL first.")
 
     job_id = registry.create("load")
     registry.update(job_id, state="running", message="Starting")
@@ -175,7 +175,7 @@ def load(body: LoadRequest) -> dict:
         def on_progress(percent: float, message: str) -> None:
             registry.update(job_id, percent=round(percent, 1), message=message)
 
-        meta: VideoMeta = youtube.load(url, VIDEO_DIR, body.max_height, on_progress)
+        meta: VideoMeta = sources.load(url, VIDEO_DIR, body.max_height, on_progress)
         _probe_cache.pop(meta.id, None)
         registry.finish(job_id, meta.model_dump())
 

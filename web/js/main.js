@@ -49,8 +49,9 @@ const dom = {
   download: el('download'), copyGif: el('copy-gif'),
   preview: el('preview'), gif: el('gif'), gifMeta: el('gif-meta'),
   panelStatus: el('panel-status'), videoMeta: el('video-meta'),
-  metaTitle: el('meta-title'), metaDims: el('meta-dims'),
-  downloadVideo: el('download-video'),
+  metaProvider: el('meta-provider'), metaTitle: el('meta-title'), metaDims: el('meta-dims'),
+  downloadVideo: el('download-video'), downloadVideoNote: el('download-video-note'),
+  sourceCue: el('source-cue'),
 };
 
 // ── small helpers ────────────────────────────────────────────────────────
@@ -121,6 +122,16 @@ function notify(message, kind = 'error') {
   dom.banner.hidden = !message;
 }
 
+function publicError(error) {
+  const message = String(error?.message || error);
+  if (message.toLowerCase().includes('[instagram]')
+      && message.toLowerCase().includes('no video formats found')) {
+    return 'That Instagram post does not contain a downloadable video. '
+      + 'Paste a Reel or a post that includes a video.';
+  }
+  return message;
+}
+
 function veil(percent, message) {
   dom.veil.hidden = false;
   dom.veilFill.style.width = `${Math.max(2, percent)}%`;
@@ -156,9 +167,9 @@ const playbackSeconds = () =>
  * leaving it stuck at whatever the smallest intermediate crop permitted.
  */
 function applySize({ width, height } = {}) {
-  const desiredWidth = width ?? state.desiredWidth;
-  const desiredHeight = height ?? state.desiredHeight;
   const { width: maxW, height: maxH } = region();
+  const desiredWidth = width ?? (state.autoSize ? maxW : state.desiredWidth);
+  const desiredHeight = height ?? (state.autoSize ? maxH : state.desiredHeight);
 
   const outWidth = evenize(Math.min(desiredWidth, maxW));
   const outHeight = state.linkAspect
@@ -176,7 +187,7 @@ const crop = initCrop({
   getCrop: () => state.crop,
   setCrop: (next) => {
     setState({ crop: next });
-    if (state.linkAspect) applySize({});
+    if (state.linkAspect || state.autoSize) applySize({});
   },
   getLockRatio: () => state.cropAspect !== null,
   getTargetAspect: () => state.cropAspect,
@@ -222,7 +233,7 @@ dom.form.addEventListener('submit', async (event) => {
 
   notify('');
   setState({ busy: true, result: null, renderedSpec: null, calibration: null });
-  veil(2, 'Contacting YouTube');
+  veil(2, 'Reading source');
 
   try {
     const { job_id } = await startLoad(url, sourceHeight());
@@ -247,7 +258,7 @@ dom.form.addEventListener('submit', async (event) => {
       result: null,
       fitNotes: null,
     });
-    applySize({ width: Math.min(480, meta.width) });
+    applySize(state.autoSize ? {} : { width: Math.min(480, meta.width) });
 
     // The server may already have measured this clip in an earlier session, so
     // adopt that calibration rather than opening with an uninformed guess.
@@ -256,7 +267,7 @@ dom.form.addEventListener('submit', async (event) => {
 
     notify('');
   } catch (error) {
-    notify(String(error.message || error));
+    notify(publicError(error));
   } finally {
     setState({ busy: false });
     hideVeil();
@@ -350,7 +361,7 @@ function cropFromInputs() {
   const w = Math.max(2, Math.min(Number(dom.cropW.value) || width, width - x));
   const h = Math.max(2, Math.min(Number(dom.cropH.value) || height, height - y));
   setState({ crop: { x: x / width, y: y / height, w: w / width, h: h / height } });
-  if (state.linkAspect) applySize({});
+  if (state.linkAspect || state.autoSize) applySize({});
   crop.draw();
 }
 
@@ -360,7 +371,7 @@ for (const input of [dom.cropX, dom.cropY, dom.cropW, dom.cropH]) {
 
 dom.cropReset.addEventListener('click', () => {
   setState({ crop: null });
-  if (state.linkAspect) applySize({});
+  if (state.linkAspect || state.autoSize) applySize({});
   crop.draw();
 });
 
@@ -390,14 +401,20 @@ dom.cropAspects.addEventListener('click', (event) => {
     const y = Math.max(0, Math.min(cy - h2 / 2, vh - h2));
     setState({ crop: { x: x / vw, y: y / vh, w: w2 / vw, h: h2 / vh } });
   }
-  if (state.linkAspect) applySize({});
+  if (state.linkAspect || state.autoSize) applySize({});
   crop.draw();
 });
 
 // ── output size inputs ───────────────────────────────────────────────────
 
-dom.outW.addEventListener('change', () => applySize({ width: Number(dom.outW.value) }));
-dom.outH.addEventListener('change', () => applySize({ height: Number(dom.outH.value) }));
+dom.outW.addEventListener('change', () => {
+  setState({ autoSize: false });
+  applySize({ width: Number(dom.outW.value) });
+});
+dom.outH.addEventListener('change', () => {
+  setState({ autoSize: false });
+  applySize({ height: Number(dom.outH.value) });
+});
 
 dom.linkAspect.addEventListener('change', () => {
   setState({ linkAspect: dom.linkAspect.checked });
@@ -405,8 +422,19 @@ dom.linkAspect.addEventListener('change', () => {
 });
 
 dom.sizePresets.addEventListener('click', (event) => {
-  const width = event.target.dataset?.w;
-  if (width) applySize({ width: Number(width) });
+  const button = event.target.closest('button');
+  if (!button) return;
+  if (button.dataset.size === 'auto') {
+    if (!state.video) return;
+    setState({ autoSize: true });
+    applySize({});
+    return;
+  }
+  const width = button.dataset.w;
+  if (width) {
+    setState({ autoSize: false });
+    applySize({ width: Number(width) });
+  }
 });
 
 // ── frame rate, quality ──────────────────────────────────────────────────
@@ -496,6 +524,7 @@ dom.fitBtn.addEventListener('click', async () => {
   const fitted = result.spec || {};
   setState({
     fps: fitted.fps ?? state.fps,
+    autoSize: false,
     desiredWidth: fitted.width ?? state.desiredWidth,
     outWidth: fitted.width ?? state.outWidth,
     outHeight: fitted.height ?? state.outHeight,
@@ -516,6 +545,53 @@ dom.fitBtn.addEventListener('click', async () => {
 function slug(text) {
   return (text || 'clip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'clip';
 }
+
+// ── source download cue ──────────────────────────────────────────────────
+
+// The card sits below five settings groups, so the strip under the URL field
+// takes the user there and makes the button announce itself on arrival.
+let calloutTimer = null;
+const stillness = matchMedia('(prefers-reduced-motion: reduce)');
+
+/** Bring the source card into view, wherever the layout keeps it.
+ *
+ * On the wide layout the panel is its own sticky scroll container, and asking
+ * the element to centre itself makes the browser scroll the page as well —
+ * which only shifts the sticky panel around. Scrolling the panel by hand keeps
+ * the page still and puts the card in the middle of the panel instead of
+ * against its bottom edge. Narrow layouts have a static panel, where the
+ * ordinary path is the right one. */
+function revealSourceCard(behavior) {
+  const panel = dom.videoMeta.closest('.panel');
+  const overflow = panel ? panel.scrollHeight - panel.clientHeight : 0;
+  if (!panel || overflow < 1) {
+    dom.videoMeta.scrollIntoView({ behavior, block: 'center' });
+    return;
+  }
+  const card = dom.videoMeta.getBoundingClientRect();
+  const within = card.top - panel.getBoundingClientRect().top + panel.scrollTop;
+  const centred = within - (panel.clientHeight - card.height) / 2;
+  panel.scrollTo({ top: Math.max(0, Math.min(centred, overflow)), behavior });
+}
+
+dom.sourceCue.addEventListener('click', () => {
+  if (!state.video) return;
+  revealSourceCard(stillness.matches ? 'auto' : 'smooth');
+
+  // Light stays on while the eye arrives, then drains through the CSS fade.
+  clearTimeout(calloutTimer);
+  dom.videoMeta.classList.add('is-lit');
+  calloutTimer = setTimeout(() => dom.videoMeta.classList.remove('is-lit'), 3200);
+
+  // Keyboard users land on the button itself; the scroll is already under way.
+  dom.downloadVideo.focus({ preventScroll: true });
+});
+
+// Once it has been used, the light has nothing left to point at.
+dom.downloadVideo.addEventListener('click', () => {
+  clearTimeout(calloutTimer);
+  dom.videoMeta.classList.remove('is-lit');
+});
 
 // ── one render pass over the DOM ─────────────────────────────────────────
 
@@ -593,14 +669,20 @@ function paint() {
     : 'Width and height move on their own.';
   dom.sizeSummary.textContent = `${state.outWidth}×${state.outHeight}`;
   for (const chip of dom.sizePresets.children) {
-    chip.classList.toggle('on', Number(chip.dataset.w) === state.desiredWidth);
+    const isAuto = chip.dataset.size === 'auto';
+    chip.disabled = isAuto && !loaded;
+    chip.classList.toggle('on', isAuto
+      ? state.autoSize
+      : !state.autoSize && Number(chip.dataset.w) === state.desiredWidth);
   }
   const scale = regionW ? state.outWidth / regionW : 1;
   const capped = state.outWidth < state.desiredWidth;
   dom.scaleHint.textContent = loaded
     ? capped
       ? `Capped at the ${regionW} × ${regionH} region. Upscaling would only blur it.`
-      : `${Math.round(scale * 100)}% of the ${regionW} × ${regionH} region`
+      : state.autoSize
+        ? `Native resolution of the ${regionW} × ${regionH} source region.`
+        : `${Math.round(scale * 100)}% of the ${regionW} × ${regionH} region`
     : '';
 
   // crop aspect chips
@@ -715,13 +797,20 @@ function paint() {
 
   // source panel
   dom.videoMeta.hidden = !loaded;
+  dom.sourceCue.hidden = !loaded;
   if (loaded) {
+    const provider = state.video.provider || 'video';
+    const providerNames = { twitter: 'Twitter / X', instagram: 'Instagram', tiktok: 'TikTok' };
+    const providerName = providerNames[provider]
+      || `${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
+    dom.metaProvider.textContent = `${providerName} source`;
     dom.metaTitle.textContent = state.video.title;
     dom.metaDims.textContent = `${state.video.width} × ${state.video.height} · ${state.video.fps} fps · ${formatTime(state.video.duration)}`;
     const videoName = slug(state.video.title);
     const separator = state.video.stream_url.includes('?') ? '&' : '?';
     dom.downloadVideo.href = `${state.video.stream_url}${separator}download=1&filename=${encodeURIComponent(videoName)}`;
     dom.downloadVideo.setAttribute('download', videoName);
+    dom.downloadVideoNote.textContent = state.video.height ? `${state.video.height}p` : '';
   }
 
   syncRanges();

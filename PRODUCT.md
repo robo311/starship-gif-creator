@@ -6,11 +6,11 @@ product
 
 ## Users
 
-Creators, community managers, designers, and casual users who want to turn a precise moment from a YouTube video into a polished GIF. They use the app in short, focused editing sessions and need to understand the workflow immediately without learning a full video editor.
+Creators, community managers, designers, and casual users who want to turn a precise moment from an online video into a polished GIF. They use the app in short, focused editing sessions and need to understand the workflow immediately without learning a full video editor.
 
 ## Product Purpose
 
-Turn a YouTube link into a cropped, optimized GIF with direct control over timing, framing, size, motion, and quality. Success means users can move confidently from link to downloadable GIF, understand the effect of each choice, and avoid repeated trial-and-error renders.
+Turn a YouTube, Twitter/X, Instagram Reel, TikTok, or other supported video link into a cropped, optimized GIF with direct control over timing, framing, size, motion, and quality. Success means users can move confidently from link to downloadable GIF, understand the effect of each choice, and avoid repeated trial-and-error renders.
 
 ## Brand Personality
 

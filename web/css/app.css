@@ -649,6 +649,78 @@ main {
 .load-action:hover:not(:disabled) svg { transform: translateX(3px); }
 .load-action:active:not(:disabled) { transform: translateY(0) scale(.99); }
 
+/* The source download lives at the far end of the panel, so this strip says it
+ * exists and walks the user down to it. */
+.source-cue {
+  width: 100%;
+  min-height: 36px;
+  margin: 8px 0 0;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  animation: slide-down 340ms var(--ease-out);
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.source-cue:hover {
+  border-color: var(--surface-on);
+  background: var(--surface-hover);
+}
+
+.source-cue-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--text-soft);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.source-cue:hover .source-cue-icon { color: var(--text); }
+
+.source-cue-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+.source-cue-copy b { color: var(--text); font-weight: 700; }
+
+.source-cue em {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  font: 500 10px/1 var(--mono);
+  font-style: normal;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transition: color 200ms ease;
+}
+.source-cue em svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 240ms var(--ease-out);
+}
+.source-cue:hover em { color: var(--text); }
+.source-cue:hover em svg { transform: translateY(2px); }
+
 button:disabled,
 .primary:disabled { opacity: .4; cursor: not-allowed; }
 
@@ -1485,7 +1557,7 @@ input[type=number]::placeholder { color: var(--muted); }
 
 .chip-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 5px;
 }
 .chip {
@@ -1695,16 +1767,18 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
 /* source video card */
 
 .source-meta {
+  position: relative;
   margin: 16px;
   padding: 13px;
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-items: center;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   background: var(--surface-raised);
   animation: reveal-up 320ms var(--ease-out);
 }
+.source-row { display: flex; gap: 12px; align-items: center; }
 .source-thumb {
   width: 40px;
   height: 32px;
@@ -1738,34 +1812,97 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   font-weight: 500;
 }
 .source-details > span { color: var(--muted); font: 400 9.5px/1 var(--mono); }
+/* Loud on purpose: it is the one action in the panel, and the whole point of the
+ * card. Muted-icon versions of this went unnoticed. */
 .source-download {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
-  color: var(--text-soft);
-  background: var(--surface);
-  text-decoration: none;
-  transition: color 180ms ease, background 180ms ease, transform 180ms var(--ease-out);
-}
-.source-download:hover {
+  position: relative;
+  z-index: 1;
+  min-height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--surface-on);
+  border-radius: var(--radius-sm);
   color: var(--text);
   background: var(--surface-hover);
-  transform: translateY(-1px);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: color 200ms ease, background 200ms ease, border-color 200ms ease,
+    transform 240ms var(--ease-out), box-shadow 240ms ease;
 }
+.source-download:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  background: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px var(--shadow-soft);
+}
+.source-download:active { transform: translateY(0) scale(.99); }
 .source-download svg {
   width: 17px;
   height: 17px;
+  flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: transform 240ms var(--ease-out);
 }
-.source-download span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.source-download:hover svg { transform: translateY(2px); }
+.source-download > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-download em {
+  flex: 0 0 auto;
+  color: inherit;
+  opacity: .62;
+  font: 400 9.5px/1 var(--mono);
+  font-style: normal;
+}
+
+/* Arriving from the cue strip: a pool of light rises behind the button and
+ * drains away on its own. Nothing blinks, nothing moves — the button simply
+ * happens to be the brightest thing in the panel for a few seconds. */
+/* Kept inside the card's own box: the panel scrolls on both axes, so a glow
+ * that bled past the edges would hand it a scrollbar. */
+.source-meta::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 132px;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    74% 88% at 50% 78%,
+    rgb(255 255 255 / .22),
+    rgb(255 255 255 / .08) 46%,
+    transparent 80%
+  );
+  /* Slow to leave, quicker to arrive: light that fades out reads as ambient,
+   * light that snaps out reads as a flash. */
+  transition: opacity 1500ms var(--ease-soft);
+}
+.source-meta.is-lit::after { opacity: 1; transition-duration: 520ms; }
+/* Light mode has no room to get brighter, so the pool is a soft warm shade
+ * instead — same effect on the eye, opposite direction. */
+[data-theme="light"] .source-meta::after {
+  background: radial-gradient(
+    74% 88% at 50% 78%,
+    rgb(23 23 26 / .13),
+    rgb(23 23 26 / .05) 46%,
+    transparent 80%
+  );
+}
 
 /* ── motion ──────────────────────────────────────────────────────────── */
 
@@ -1873,6 +2010,8 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   .result-actions > * { flex: 1 1 auto; }
   .preview { grid-template-columns: 1fr; }
   .aspect-picks { grid-template-columns: repeat(3, 1fr); }
+  /* Keep the arrow, drop the words: the copy already says where it goes. */
+  .source-cue em { font-size: 0; gap: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
