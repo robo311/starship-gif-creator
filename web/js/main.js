@@ -782,7 +782,9 @@ function paint() {
         ? `optimiser saved ${saved}%`
         : 'already minimal';
     dom.gif.src = result.gif_url;
+    // Both dimensions, so the box is the right shape before the GIF decodes.
     dom.gif.width = result.width;
+    dom.gif.height = result.height;
     dom.gifMeta.textContent = [
       `${result.width} × ${result.height}`,
       `${result.frames} frames @ ${result.fps} fps`,

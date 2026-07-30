@@ -81,6 +81,13 @@
   --panel-width: 358px;
   --bar: 46px;
   --lane: 18px;
+  /* Every control on the loader row measures from this, so the URL field, the
+   * quality picker and the load button cannot drift out of line. */
+  --loader-h: 50px;
+  /* The quality picker's frame inset: 1px border plus 4px padding. The load
+   * button subtracts it twice, so its edges land on the selected chip's rather
+   * than on the invisible fieldset border around it. */
+  --loader-inset: 5px;
 }
 
 [data-theme="light"] {
@@ -520,7 +527,7 @@ main {
 }
 
 .url-field {
-  height: 50px;
+  height: var(--loader-h);
   position: relative;
   display: flex;
   align-items: center;
@@ -575,10 +582,12 @@ main {
 
 .quality-picks {
   min-width: 0;
+  height: var(--loader-h);
   margin: 0;
-  padding: 4px;
+  /* inset minus the 1px border it sits inside */
+  padding: calc(var(--loader-inset) - 1px);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 2px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
@@ -596,7 +605,6 @@ main {
   position: relative;
   display: grid;
   place-items: center;
-  height: 40px;
   padding: 0 13px;
   border-radius: var(--radius-sm);
   color: var(--muted);
@@ -618,7 +626,8 @@ main {
 .seg:has(input:focus-visible) { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 
 .load-action {
-  height: 50px;
+  height: calc(var(--loader-h) - var(--loader-inset) * 2);
+  align-self: center;
   padding: 0 20px;
   display: inline-flex;
   align-items: center;
@@ -1257,20 +1266,32 @@ button:disabled,
 }
 .secondary-action:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
 
+/* One centred column: the loop is the subject here, so it sits in the middle
+ * with its numbers beneath it rather than being pushed to one edge by them. */
 .preview {
   grid-column: 1 / -1;
   padding-top: 20px;
   border-top: 1px solid var(--line-soft);
   display: grid;
-  grid-template-columns: minmax(180px, max-content) 1fr;
-  align-items: end;
-  gap: 16px;
+  /* minmax(0, 1fr), not the implicit `auto`: centred items are no longer
+   * stretched, so an auto track would size to a wide loop's max-content and
+   * carry it past the column edge instead of letting max-width reel it in. */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 12px;
   animation: reveal-up 380ms var(--ease-out);
 }
 
 .preview-frame { position: relative; width: max-content; max-width: 100%; }
 .preview img {
   display: block;
+  /* Both `auto`, deliberately: the width/height attributes below map to a
+   * presentational `width`, and a definite width plus `max-height` lets the two
+   * clamps fight — a 540×960 loop comes out 540×420, squashed to landscape.
+   * With both auto the caps apply to the intrinsic ratio and portrait stays
+   * portrait; the attributes still supply the ratio before the GIF decodes. */
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 420px;
   border-radius: var(--radius);
@@ -1289,7 +1310,7 @@ button:disabled,
   letter-spacing: .1em;
   text-transform: uppercase;
 }
-.preview-meta { color: var(--muted); font: 400 10.5px/1.6 var(--mono); }
+.preview-meta { color: var(--muted); font: 400 10.5px/1.6 var(--mono); text-align: center; }
 
 /* ── panel ───────────────────────────────────────────────────────────── */
 
@@ -2008,7 +2029,6 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   .result-copy, .preview { grid-column: 1; }
   .result-actions { flex-wrap: wrap; }
   .result-actions > * { flex: 1 1 auto; }
-  .preview { grid-template-columns: 1fr; }
   .aspect-picks { grid-template-columns: repeat(3, 1fr); }
   /* Keep the arrow, drop the words: the copy already says where it goes. */
   .source-cue em { font-size: 0; gap: 0; }
