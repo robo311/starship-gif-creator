@@ -26,7 +26,11 @@ WEB_DIR = BASE_DIR / "web"
 REQUIRED_BINARIES = ["ffmpeg", "ffprobe", "yt-dlp", "gifsicle"]
 CHUNK = 512 * 1024
 
-app = FastAPI(title="YouTube GIF Extractor", docs_url="/api/docs")
+app = FastAPI(
+    title="Cut to GIF API",
+    description="Local YouTube-to-GIF rendering and optimization API.",
+    docs_url="/api/docs",
+)
 
 # Measured bits-per-pixel ratio per video, so size estimates learn from real
 # renders instead of trusting a content-blind constant forever.
@@ -322,6 +326,20 @@ if (WEB_DIR / "js").is_dir():
     app.mount("/js", StaticFiles(directory=WEB_DIR / "js"), name="js")
 if (WEB_DIR / "css").is_dir():
     app.mount("/css", StaticFiles(directory=WEB_DIR / "css"), name="css")
+if (WEB_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
+
+
+@app.get("/site.webmanifest")
+def manifest() -> Response:
+    path = WEB_DIR / "site.webmanifest"
+    return FileResponse(path, media_type="application/manifest+json")
+
+
+@app.get("/robots.txt")
+def robots() -> Response:
+    path = WEB_DIR / "robots.txt"
+    return FileResponse(path, media_type="text/plain")
 
 
 @app.get("/")

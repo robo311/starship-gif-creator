@@ -9,8 +9,12 @@ import { initTimeline } from './timeline.js';
 const el = (id) => document.getElementById(id);
 
 const dom = {
-  form: el('load-form'), url: el('url'), maxHeight: el('max-height'), load: el('load'),
+  form: el('load-form'), url: el('url'), pasteUrl: el('paste-url'),
+  maxHeight: el('max-height'), load: el('load'),
   banner: el('banner'), placeholder: el('placeholder'),
+  stepLink: el('step-link'), stepEdit: el('step-edit'), stepExport: el('step-export'),
+  studioTitle: el('studio-title'), themeToggle: el('theme-toggle'),
+  themeColor: el('theme-color'),
   viewport: el('viewport'), video: el('video'), overlay: el('overlay'),
   veil: el('veil'), veilText: el('veil-text'), veilFill: el('veil-fill'),
   play: el('play'), now: el('now'), total: el('total'), loop: el('loop'),
@@ -30,21 +34,43 @@ const dom = {
   boomerang: el('boomerang'), loopForever: el('loop-forever'),
   sharpen: el('sharpen'), sharpenOut: el('sharpen-out'),
   targetMB: el('target-mb'), fitBtn: el('fit'), fitNote: el('fit-note'),
-  presets: el('presets'), dedupe: el('dedupe'), dedupeHint: el('dedupe-hint'),
+  presets: el('presets'), qualitySummary: el('quality-summary'),
+  dedupe: el('dedupe'), dedupeHint: el('dedupe-hint'),
   colors: el('colors'), colorsOut: el('colors-out'),
   lossy: el('lossy'), lossyOut: el('lossy-out'),
   dither: el('dither'), bayer: el('bayer'), bayerOut: el('bayer-out'),
   advancedReset: el('advanced-reset'),
   estSize: el('est-size'), estNote: el('est-note'),
   actualBlock: el('actual-block'), actSize: el('act-size'), actNote: el('act-note'),
-  renderBtn: el('render'), download: el('download'),
+  renderBtn: el('render'), renderLabel: document.querySelector('#render .button-label'),
+  download: el('download'), copyGif: el('copy-gif'),
   preview: el('preview'), gif: el('gif'), gifMeta: el('gif-meta'),
-  videoMeta: el('video-meta'), metaTitle: el('meta-title'), metaDims: el('meta-dims'),
+  panelStatus: el('panel-status'), videoMeta: el('video-meta'),
+  metaTitle: el('meta-title'), metaDims: el('meta-dims'),
 };
 
 // ── small helpers ────────────────────────────────────────────────────────
 
 const evenize = (value) => Math.max(16, Math.round(value / 2) * 2);
+
+function setTheme(theme, remember = true) {
+  const light = theme === 'light';
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  dom.themeToggle.setAttribute('aria-pressed', String(light));
+  dom.themeToggle.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+  dom.themeToggle.title = light ? 'Switch to dark mode' : 'Switch to light mode';
+  dom.themeColor.content = light ? '#f4f4f5' : '#101011';
+  if (remember) {
+    try {
+      localStorage.setItem('cut-to-gif-theme', light ? 'light' : 'dark');
+    } catch {}
+  }
+}
+
+setTheme(document.documentElement.dataset.theme, false);
+dom.themeToggle.addEventListener('click', () => {
+  setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+});
 
 function formatTime(seconds) {
   if (!isFinite(seconds)) return '0:00.00';
@@ -137,13 +163,29 @@ const timeline = initTimeline({
 
 // ── load ─────────────────────────────────────────────────────────────────
 
+dom.pasteUrl.addEventListener('click', async () => {
+  try {
+    const text = (await navigator.clipboard.readText()).trim();
+    if (!text) {
+      notify('Your clipboard is empty.', 'info');
+      return;
+    }
+    dom.url.value = text;
+    dom.url.focus();
+    notify('');
+  } catch {
+    notify('Clipboard access is unavailable here. Paste the link into the field directly.', 'info');
+    dom.url.focus();
+  }
+});
+
 dom.form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const url = dom.url.value.trim();
   if (!url) return;
 
   notify('');
-  setState({ busy: true, result: null, calibration: null });
+  setState({ busy: true, result: null, renderedSpec: null, calibration: null });
   veil(2, 'Contacting YouTube');
 
   try {
@@ -213,8 +255,8 @@ dom.video.addEventListener('loadedmetadata', () => {
   timeline.render(dom.video.currentTime);
 });
 
-dom.video.addEventListener('play', () => { dom.play.textContent = '❚❚'; });
-dom.video.addEventListener('pause', () => { dom.play.textContent = '▶'; });
+dom.video.addEventListener('play', () => { dom.play.classList.add('is-playing'); });
+dom.video.addEventListener('pause', () => { dom.play.classList.remove('is-playing'); });
 dom.video.addEventListener('error', () => {
   if (dom.video.src) notify('The browser could not play the downloaded file. Try loading it again at a lower quality.');
 });
@@ -364,6 +406,7 @@ dom.advancedReset.addEventListener('click', () => setState({ overrides: {} }));
 /** Run a render-shaped job, showing progress and storing the result. */
 async function runJob(begin, label) {
   if (!state.video) return null;
+  const requestedSpec = JSON.stringify(renderSpec());
   notify('');
   setState({ busy: true, result: null, fitNotes: null });
   veil(2, label);
@@ -371,7 +414,11 @@ async function runJob(begin, label) {
   try {
     const { job_id } = await begin();
     const result = await awaitJob(job_id, veil);
-    setState({ result, calibration: result.calibration ?? state.calibration });
+    setState({
+      result,
+      calibration: result.calibration ?? state.calibration,
+      renderedSpec: requestedSpec,
+    });
     return result;
   } catch (error) {
     notify(String(error.message || error));
@@ -384,6 +431,23 @@ async function runJob(begin, label) {
 
 dom.renderBtn.addEventListener('click', () =>
   runJob(() => startRender(renderSpec()), 'Preparing'));
+
+dom.copyGif.addEventListener('click', async () => {
+  if (!state.result) return;
+  try {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+      throw new Error('unsupported');
+    }
+    const response = await fetch(state.result.gif_url);
+    const blob = await response.blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    const previous = dom.copyGif.textContent;
+    dom.copyGif.textContent = 'Copied';
+    setTimeout(() => { dom.copyGif.textContent = previous; }, 1600);
+  } catch {
+    notify('This browser cannot copy GIF files directly. Downloading still works.', 'info');
+  }
+});
 
 dom.fitBtn.addEventListener('click', async () => {
   const targetBytes = state.targetMB * 1024 * 1024;
@@ -411,6 +475,7 @@ dom.fitBtn.addEventListener('click', async () => {
       notes: result.notes || [],
     },
   });
+  setState({ renderedSpec: JSON.stringify(renderSpec()) });
 });
 
 function slug(text) {
@@ -421,11 +486,37 @@ function slug(text) {
 
 function paint() {
   const loaded = Boolean(state.video);
+  const complete = Boolean(state.result);
+  const resultIsStale = complete && state.renderedSpec !== JSON.stringify(renderSpec());
   dom.placeholder.hidden = loaded;
   dom.load.disabled = state.busy;
   dom.renderBtn.disabled = !loaded || state.busy;
   dom.fitBtn.disabled = !loaded || state.busy;
-  dom.renderBtn.textContent = state.busy ? 'Rendering…' : 'Render GIF';
+  dom.renderLabel.textContent = state.busy
+    ? 'Rendering…'
+    : resultIsStale
+      ? 'Update GIF'
+      : complete
+        ? 'Render again'
+        : 'Render GIF';
+
+  dom.studioTitle.textContent = loaded ? 'Frame it. Trim it. Make it loop.' : 'Catch the part worth replaying.';
+  dom.panelStatus.className = `panel-status ${loaded ? 'ready' : 'waiting'}`;
+  dom.panelStatus.innerHTML = loaded ? '<i></i> Ready to tune' : '<i></i> Waiting for video';
+
+  for (const step of [dom.stepLink, dom.stepEdit, dom.stepExport]) {
+    step.classList.remove('current', 'done');
+  }
+  if (!loaded) {
+    dom.stepLink.classList.add('current');
+  } else if (!complete) {
+    dom.stepLink.classList.add('done');
+    dom.stepEdit.classList.add('current');
+  } else {
+    dom.stepLink.classList.add('done');
+    dom.stepEdit.classList.add('done');
+    dom.stepExport.classList.add('done');
+  }
 
   // clip readout
   const frames = frameCount(state.duration, state.fps, state.speed, state.boomerang);
@@ -463,7 +554,7 @@ function paint() {
   const capped = state.outWidth < state.desiredWidth;
   dom.scaleHint.textContent = loaded
     ? capped
-      ? `Capped at the ${regionW} × ${regionH} region — upscaling would only blur it.`
+      ? `Capped at the ${regionW} × ${regionH} region. Upscaling would only blur it.`
       : `${Math.round(scale * 100)}% of the ${regionW} × ${regionH} region`
     : '';
 
@@ -483,7 +574,7 @@ function paint() {
   dom.fps.value = state.fps;
   dom.fpsOut.textContent = `${state.fps} fps`;
   dom.fpsHint.textContent = loaded && state.fps >= fpsCeiling
-    ? `At the source's own ${sourceFps()} fps — asking for more would only duplicate frames.`
+    ? `At the source's own ${sourceFps()} fps. Asking for more would only duplicate frames.`
     : 'Higher is smoother but multiplies the file size almost linearly.';
 
   dom.speed.value = state.speed;
@@ -503,6 +594,9 @@ function paint() {
   for (const button of dom.presets.children) {
     button.classList.toggle('on', button.dataset.preset === state.preset);
   }
+  dom.qualitySummary.textContent = state.preset === 'max'
+    ? 'Max detail'
+    : state.preset.charAt(0).toUpperCase() + state.preset.slice(1);
   dom.colors.value = active.colors;
   dom.colorsOut.textContent = active.colors;
   dom.lossy.value = active.lossy;
@@ -515,18 +609,18 @@ function paint() {
   // estimate — meaningless until there is a video to measure against
   const bpp = bitsPerPixel({ ...active, sharpen: state.sharpen });
   const predicted = estimateBytes(state.outWidth, state.outHeight, frames, bpp, state.calibration);
-  dom.estSize.textContent = loaded ? formatBytes(predicted) : '—';
+  dom.estSize.textContent = loaded ? formatBytes(predicted) : 'Not ready';
   dom.estNote.textContent = !loaded
     ? 'load a video first'
     : state.calibration
       ? 'calibrated from your last render'
-      : 'rough guess — render once to calibrate';
+      : 'rough guess, render once to calibrate';
 
   // target size
   dom.targetMB.value = state.targetMB;
   if (state.fitNotes) {
     const { met, renders, notes } = state.fitNotes;
-    const detail = notes.length ? ` — ${notes.join(', ')}` : '';
+    const detail = notes.length ? `: ${notes.join(', ')}` : '';
     dom.fitNote.textContent = met
       ? `Fitted in ${renders} render${renders === 1 ? '' : 's'}${detail}.`
       : `Could not reach ${state.targetMB} MB after ${renders} renders${detail}.`;
@@ -540,12 +634,17 @@ function paint() {
   dom.actualBlock.hidden = !result;
   dom.preview.hidden = !result;
   dom.download.hidden = !result;
+  dom.copyGif.hidden = !result;
   if (result) {
     dom.actSize.textContent = formatBytes(result.bytes);
     const saved = result.bytes_before_optimize
       ? Math.round((1 - result.bytes / result.bytes_before_optimize) * 100)
       : 0;
-    dom.actNote.textContent = saved > 0 ? `optimiser saved ${saved}%` : 'already minimal';
+    dom.actNote.textContent = resultIsStale
+      ? 'preview uses your previous settings'
+      : saved > 0
+        ? `optimiser saved ${saved}%`
+        : 'already minimal';
     dom.gif.src = result.gif_url;
     dom.gif.width = result.width;
     dom.gifMeta.textContent = [

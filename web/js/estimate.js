@@ -44,7 +44,7 @@ export function estimateBytes(width, height, frames, bpp, calibration) {
 }
 
 export function formatBytes(bytes) {
-  if (!bytes) return '—';
+  if (!bytes) return 'Not ready';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;

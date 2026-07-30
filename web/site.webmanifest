@@ -1,0 +1,17 @@
+{
+  "name": "Cut to GIF · YouTube GIF maker",
+  "short_name": "Cut to GIF",
+  "description": "Clip, crop, optimize, and download GIFs from YouTube videos.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#171714",
+  "theme_color": "#171714",
+  "icons": [
+    {
+      "src": "/assets/cut-to-gif-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

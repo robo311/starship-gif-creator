@@ -170,14 +170,14 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
     if (!rect || !video.videoWidth) return;
 
     // Dim everything outside the crop.
-    ctx.fillStyle = 'rgba(5, 7, 10, 0.62)';
+    ctx.fillStyle = 'oklch(12% 0.006 85 / 0.7)';
     ctx.beginPath();
     ctx.rect(box.left, box.top, box.width, box.height);
     ctx.rect(rect.x, rect.y, rect.w, rect.h);
     ctx.fill('evenodd');
 
     // Thirds guides, faint enough to compose against without distraction.
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.strokeStyle = 'oklch(92% 0.008 85 / 0.16)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 1; i < 3; i += 1) {
@@ -188,12 +188,12 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
     }
     ctx.stroke();
 
-    ctx.strokeStyle = '#ff6b4a';
+    ctx.strokeStyle = 'oklch(84% 0.008 85)';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
 
-    ctx.fillStyle = '#ff6b4a';
-    ctx.strokeStyle = '#0a0c0f';
+    ctx.fillStyle = 'oklch(84% 0.008 85)';
+    ctx.strokeStyle = 'oklch(14% 0.006 85)';
     for (const [px, py] of Object.values(handlePositions(rect))) {
       ctx.beginPath();
       ctx.rect(px - 3.5, py - 3.5, 7, 7);
@@ -207,9 +207,9 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
     ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
     const textWidth = ctx.measureText(label).width;
     const labelY = rect.y > 22 ? rect.y - 20 : rect.y + 4;
-    ctx.fillStyle = 'rgba(10, 12, 15, 0.85)';
+    ctx.fillStyle = 'oklch(14% 0.006 85 / 0.9)';
     ctx.fillRect(rect.x, labelY, textWidth + 12, 16);
-    ctx.fillStyle = '#ffd9cf';
+    ctx.fillStyle = 'oklch(91% 0.008 85)';
     ctx.fillText(label, rect.x + 6, labelY + 12);
   }
 

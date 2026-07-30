@@ -30,6 +30,7 @@ export const state = {
   calibration: null,    // measured bpp ratio for the loaded video
   busy: false,
   result: null,
+  renderedSpec: null,    // JSON snapshot used to flag a preview after settings change
   loop: true,
 };
 

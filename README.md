@@ -1,7 +1,8 @@
-# YouTube → GIF
+# Cut to GIF
 
-Make a GIF from a YouTube link: preview the video, draw the crop by hand, set the
-size and frame rate, pick the clip, see the size before you commit, download.
+**Make the moment loop.** Turn a YouTube link into a crisp, precisely cropped
+GIF: pick the clip, frame it by hand, tune motion and quality, see the expected
+size before committing, then download or copy the result.
 
 ```bash
 ./run.sh          # → http://127.0.0.1:8420
