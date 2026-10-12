@@ -5,3 +5,4 @@ cache/
 .playwright-mcp/
 .DS_Store
 .pytest_cache/
+*.stackdump

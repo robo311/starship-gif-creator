@@ -75,9 +75,11 @@ function writeSize(node, text) {
 }
 
 /** Fill a weight meter, measuring the size against the user's own limit. */
-function setMeter(node, ratio) {
+const NO_LIMIT_SCALE_MB = 10;
+
+function setMeter(node, ratio, canOverflow = true) {
   node.style.setProperty('--fill', `${Math.max(4, Math.min(100, ratio * 100))}%`);
-  node.classList.toggle('over', ratio > 1);
+  node.classList.toggle('over', canOverflow && ratio > 1);
 }
 
 /** Paint the travelled part of every slider: the browser will not do it alone. */
@@ -484,7 +486,17 @@ dom.speed.addEventListener('input', () => setState({ speed: Number(dom.speed.val
 dom.sharpen.addEventListener('input', () => setState({ sharpen: Number(dom.sharpen.value) }));
 dom.boomerang.addEventListener('change', () => setState({ boomerang: dom.boomerang.checked }));
 dom.loopForever.addEventListener('change', () => setState({ loopForever: dom.loopForever.checked }));
-dom.targetMB.addEventListener('change', () => setState({ targetMB: Number(dom.targetMB.value) || 2 }));
+// An empty box means "no limit": whatever a fit gave up is handed back, so the
+// next render uses the user's own settings again.
+dom.targetMB.addEventListener('change', () => {
+  const value = Number(dom.targetMB.value);
+  if (dom.targetMB.value.trim() === '' || !(value > 0)) {
+    setState({ targetMB: null });
+    restoreFitBase();
+  } else {
+    setState({ targetMB: value });
+  }
+});
 
 // The quality presets are a ladder, lightest first, drawn as a slider.
 const PRESET_LEVELS = ['tiny', 'small', 'balanced', 'high', 'max'];
@@ -625,6 +637,7 @@ const FIT_FIELDS = ['fps', 'autoSize', 'desiredWidth', 'desiredHeight', 'overrid
 const fitSnapshot = () => Object.fromEntries(FIT_FIELDS.map((key) => [key, state[key]]));
 
 dom.fitBtn.addEventListener('click', async () => {
+  if (!state.targetMB) return;
   const targetBytes = state.targetMB * 1024 * 1024;
   const chosen = state.fitBase ?? fitSnapshot();
   setState(chosen);
@@ -658,11 +671,13 @@ dom.fitBtn.addEventListener('click', async () => {
   setState({ renderedSpec: JSON.stringify(renderSpec()) });
 });
 
-dom.fitRestore.addEventListener('click', () => {
+function restoreFitBase() {
   if (!state.fitBase) return;
   setState({ ...state.fitBase, fitBase: null, fitNotes: null });
   applySize();
-});
+}
+
+dom.fitRestore.addEventListener('click', restoreFitBase);
 
 function slug(text) {
   return (text || 'clip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'clip';
@@ -724,7 +739,7 @@ function paint() {
   dom.placeholder.hidden = loaded;
   dom.load.disabled = state.busy;
   dom.renderBtn.disabled = !loaded || state.busy;
-  dom.fitBtn.disabled = !loaded || state.busy;
+  dom.fitBtn.disabled = !loaded || state.busy || !state.targetMB;
   dom.fitRestore.hidden = !state.fitBase;
   dom.fitRestore.disabled = state.busy;
   dom.renderLabel.textContent = state.busy
@@ -875,9 +890,10 @@ function paint() {
   // estimate — meaningless until there is a video to measure against
   const bpp = bitsPerPixel({ ...active, sharpen: state.sharpen });
   const predicted = estimateBytes(state.outWidth, state.outHeight, frames, bpp, state.calibration);
-  const limitBytes = state.targetMB * 1024 * 1024;
+  // Without a limit the meters still need a scale; they just never read as over.
+  const limitBytes = (state.targetMB || NO_LIMIT_SCALE_MB) * 1024 * 1024;
   writeSize(dom.estSize, loaded ? formatBytes(predicted) : 'Not ready');
-  setMeter(dom.weightFill, loaded ? predicted / limitBytes : 0.08);
+  setMeter(dom.weightFill, loaded ? predicted / limitBytes : 0.08, Boolean(state.targetMB));
   dom.estNote.textContent = !loaded
     ? 'load a video first'
     : state.calibration
@@ -885,8 +901,10 @@ function paint() {
       : 'rough guess, render once to calibrate';
 
   // target size
-  dom.targetMB.value = state.targetMB;
-  if (state.fitNotes) {
+  dom.targetMB.value = state.targetMB ?? '';
+  if (!state.targetMB) {
+    dom.fitNote.textContent = 'No limit set. Enter a size in MB to fit the GIF under it.';
+  } else if (state.fitNotes) {
     const { met, renders, notes } = state.fitNotes;
     const detail = notes.length ? `: ${notes.join(', ')}` : '';
     dom.fitNote.textContent = met
@@ -905,7 +923,7 @@ function paint() {
   dom.copyGif.hidden = !result;
   if (result) {
     writeSize(dom.actSize, formatBytes(result.bytes));
-    setMeter(dom.actualFill, result.bytes / limitBytes);
+    setMeter(dom.actualFill, result.bytes / limitBytes, Boolean(state.targetMB));
     const saved = result.bytes_before_optimize
       ? Math.round((1 - result.bytes / result.bytes_before_optimize) * 100)
       : 0;

@@ -24,7 +24,7 @@ export const state = {
   boomerang: false,
   sharpen: 0,
   loopForever: true,
-  targetMB: 2,
+  targetMB: 2,          // null when the user wants no size limit
   fitNotes: null,
   fitBase: null,        // the user's own settings from before the last fit
   overrides: {},        // {colors, dither, bayerScale, lossy} once touched
