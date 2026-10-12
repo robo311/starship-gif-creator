@@ -35,6 +35,8 @@ LADDER: list[dict] = [
 
 MIN_FPS = 6
 MIN_WIDTH = 120
+# A fitted file at least this share of the target is close enough to stop.
+GOOD_ENOUGH = 0.85
 
 
 @dataclass
@@ -119,23 +121,33 @@ def fit(
         return FitOutcome(result, spec, True, renders, ["already within the target"])
 
     calibration = _calibration_from(spec, result)
+    # Rung indices bracketing the answer: `too_big` is the gentlest setting known
+    # to overshoot (-1 is the user's own spec), `fits` the gentlest known to fit.
+    too_big = -1
+    fits: tuple[int, RenderSpec, RenderResult] | None = None
     rung_index = 0
 
-    while renders < max_renders and rung_index < len(LADDER):
-        # Advance to the first rung predicted to clear the target with margin,
-        # so a slightly optimistic model does not waste a render.
-        candidate = None
-        while rung_index < len(LADDER):
-            trial = apply_rung(spec, LADDER[rung_index])
-            rung_index += 1
-            if predicted_bytes(trial, calibration) <= target_bytes * 0.95:
-                candidate = trial
+    while renders < max_renders:
+        if fits is None:
+            if rung_index >= len(LADDER):
                 break
-            candidate = trial  # keep the most aggressive rung as a fallback
+            # Advance to the first rung predicted to clear the target with margin,
+            # so a slightly optimistic model does not waste a render.
+            while rung_index < len(LADDER):
+                index = rung_index
+                rung_index += 1
+                if predicted_bytes(apply_rung(spec, LADDER[index]), calibration) <= target_bytes * 0.95:
+                    break
+        else:
+            # Something already fits. If it fits with lots to spare, spend the
+            # remaining budget on a gentler rung between the two known bounds,
+            # rather than handing back a file far smaller than the user allowed.
+            fit_index, _, fit_result = fits
+            if fit_result.bytes >= target_bytes * GOOD_ENOUGH or fit_index - too_big <= 1:
+                break
+            index = (too_big + fit_index + 1) // 2
 
-        if candidate is None:
-            break
-
+        candidate = apply_rung(spec, LADDER[index])
         renders += 1
         step(renders, f"Trying {candidate.resolved()['colors']} colours at {candidate.fps} fps")
         attempt = render(candidate)
@@ -144,9 +156,14 @@ def fit(
             best_spec, best_result = candidate, attempt
 
         if attempt.bytes <= target_bytes:
-            return FitOutcome(attempt, candidate, True, renders, describe(spec, candidate))
+            fits = (index, candidate, attempt)
+        else:
+            too_big = max(too_big, index)
+            calibration = _calibration_from(candidate, attempt)
 
-        calibration = _calibration_from(candidate, attempt)
+    if fits is not None:
+        _, fit_spec, fit_result = fits
+        return FitOutcome(fit_result, fit_spec, True, renders, describe(spec, fit_spec))
 
     notes = describe(spec, best_spec)
     notes.append("could not reach the target — shorten the clip or crop tighter")

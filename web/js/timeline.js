@@ -50,11 +50,12 @@ export function initTimeline({
     render();
   }
 
-  function commit(start, end) {
+  /** `edge` names the end the user is working on, so the preview shows it. */
+  function commit(start, end, edge) {
     const whole = total();
     const clampedStart = Math.max(0, Math.min(start, Math.max(0, whole - MIN_CLIP)));
     const clampedEnd = Math.min(whole, Math.max(end, clampedStart + MIN_CLIP));
-    setRange(clampedStart, Math.min(clampedEnd, clampedStart + MAX_CLIP));
+    setRange(clampedStart, Math.min(clampedEnd, clampedStart + MAX_CLIP), edge);
   }
 
   /** Move the clip bodily, preserving its length. */
@@ -63,7 +64,7 @@ export function initTimeline({
     const { start, end } = getRange();
     const length = end - start;
     const next = Math.max(0, Math.min(time - grabOffset, Math.max(0, whole - length)));
-    commit(next, next + length);
+    commit(next, next + length, 'start');
   }
 
   // ── dragging ──────────────────────────────────────────────────────────
@@ -89,18 +90,39 @@ export function initTimeline({
   // Bare track: everything the more specific handlers above did not claim.
   track.addEventListener('pointerdown', beginDrag('seek'));
 
-  track.addEventListener('pointermove', (event) => {
-    if (!dragging) return;
+  function dragTo(event) {
     const { start, end } = getRange();
     const time = timeAt(event);
-    if (dragging === 'in') commit(Math.min(time, end - MIN_CLIP), end);
-    else if (dragging === 'out') commit(start, Math.max(time, start + MIN_CLIP));
+    if (dragging === 'in') commit(Math.min(time, end - MIN_CLIP), end, 'start');
+    else if (dragging === 'out') commit(start, Math.max(time, start + MIN_CLIP), 'end');
     else if (dragging === 'shift') slideClip(time);
     else seek(time);
+  }
+
+  // Pointers can report several moves per display frame. Only the latest one
+  // matters, so they are folded into one update per frame.
+  let pendingMove = null;
+  let frameRequest = 0;
+
+  track.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    pendingMove = event;
+    if (!frameRequest) {
+      frameRequest = requestAnimationFrame(() => {
+        frameRequest = 0;
+        if (dragging && pendingMove) dragTo(pendingMove);
+        pendingMove = null;
+      });
+    }
   });
 
   const stop = (event) => {
     if (!dragging) return;
+    // Land exactly where the pointer was released, not a frame behind it.
+    cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
+    if (pendingMove) dragTo(pendingMove);
+    pendingMove = null;
     dragging = null;
     if (track.hasPointerCapture(event.pointerId)) track.releasePointerCapture(event.pointerId);
   };
@@ -143,8 +165,8 @@ export function initTimeline({
       if (!delta) return;
       event.preventDefault();
       const { start, end } = getRange();
-      if (which === 'in') commit(Math.min(start + delta, end - MIN_CLIP), end);
-      else commit(start, Math.max(end + delta, start + MIN_CLIP));
+      if (which === 'in') commit(Math.min(start + delta, end - MIN_CLIP), end, 'start');
+      else commit(start, Math.max(end + delta, start + MIN_CLIP), 'end');
     });
   }
 

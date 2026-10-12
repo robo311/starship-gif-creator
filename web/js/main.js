@@ -34,7 +34,7 @@ const dom = {
   speed: el('speed'), speedOut: el('speed-out'),
   boomerang: el('boomerang'), loopForever: el('loop-forever'),
   sharpen: el('sharpen'), sharpenOut: el('sharpen-out'),
-  targetMB: el('target-mb'), fitBtn: el('fit'), fitNote: el('fit-note'),
+  targetMB: el('target-mb'), fitBtn: el('fit'), fitNote: el('fit-note'), fitRestore: el('fit-restore'),
   presets: el('presets'), presetNote: el('preset-note'), qualitySummary: el('quality-summary'),
   dedupe: el('dedupe'), dedupeHint: el('dedupe-hint'),
   colors: el('colors'), colorsOut: el('colors-out'),
@@ -200,12 +200,36 @@ const timeline = initTimeline({
   playhead: dom.playhead, scrub: dom.scrub, viewLabel: dom.viewLabel,
   getDuration: videoDuration,
   getRange: () => ({ start: state.start, end: clipEnd() }),
-  setRange: (start, end) => {
-    const movedIn = Math.abs(start - state.start) > 1e-6;
+  setRange: (start, end, edge) => {
+    // Seek first, so the repaint below already draws the playhead in place.
+    previewSeek(edge === 'end' ? Math.max(0, end - 0.05) : start);
     setState({ start, duration: Math.max(0.1, end - start) });
-    dom.video.currentTime = movedIn ? start : Math.max(0, end - 0.05);
   },
-  seek: (time) => { dom.video.currentTime = time; },
+  seek: (time) => {
+    previewSeek(time);
+    timeline.render(playheadTime());
+  },
+});
+
+// Dragging asks for a new frame on every pointer move, far faster than the
+// decoder can deliver. Piling seeks up makes the preview stutter and lag, so
+// only one runs at a time and anything asked for meanwhile collapses into the
+// latest request, applied as soon as the current seek lands.
+let queuedSeek = null;
+
+function previewSeek(time) {
+  if (dom.video.seeking) queuedSeek = time;
+  else dom.video.currentTime = time;
+}
+
+/** Where the playhead should be drawn: the newest requested position. */
+const playheadTime = () => queuedSeek ?? dom.video.currentTime;
+
+dom.video.addEventListener('seeked', () => {
+  if (queuedSeek === null) return;
+  const time = queuedSeek;
+  queuedSeek = null;
+  dom.video.currentTime = time;
 });
 
 // ── load ─────────────────────────────────────────────────────────────────
@@ -257,6 +281,7 @@ dom.form.addEventListener('submit', async (event) => {
       fps: Math.min(state.fps, 30, Math.max(1, Math.round(meta.fps || 25))),
       result: null,
       fitNotes: null,
+      fitBase: null,
     });
     applySize(state.autoSize ? {} : { width: Math.min(480, meta.width) });
 
@@ -293,13 +318,13 @@ dom.video.addEventListener('timeupdate', () => {
     dom.video.currentTime = state.start;
   }
   dom.now.textContent = formatTime(dom.video.currentTime);
-  timeline.render(dom.video.currentTime);
+  timeline.render(playheadTime());
 });
 
 dom.video.addEventListener('loadedmetadata', () => {
   dom.total.textContent = formatTime(videoDuration());
   crop.draw();
-  timeline.render(dom.video.currentTime);
+  timeline.render(playheadTime());
 });
 
 dom.video.addEventListener('play', () => { dom.play.classList.add('is-playing'); });
@@ -593,8 +618,17 @@ dom.copyGif.addEventListener('click', async () => {
   }
 });
 
+// Fitting writes its trade-offs into the panel. The settings the user chose are
+// kept aside, so a later fit starts from them rather than from an already
+// degraded result, and so they can be restored once no limit is wanted.
+const FIT_FIELDS = ['fps', 'autoSize', 'desiredWidth', 'desiredHeight', 'overrides'];
+const fitSnapshot = () => Object.fromEntries(FIT_FIELDS.map((key) => [key, state[key]]));
+
 dom.fitBtn.addEventListener('click', async () => {
   const targetBytes = state.targetMB * 1024 * 1024;
+  const chosen = state.fitBase ?? fitSnapshot();
+  setState(chosen);
+  applySize(); // the crop may have changed since, so derive the output from it
   const result = await runJob(
     () => startFit(renderSpec(), targetBytes),
     `Fitting under ${state.targetMB} MB`,
@@ -614,6 +648,7 @@ dom.fitBtn.addEventListener('click', async () => {
       colors: fitted.colors ?? state.overrides.colors,
       lossy: fitted.lossy ?? state.overrides.lossy,
     },
+    fitBase: chosen,
     fitNotes: {
       met: result.met,
       renders: result.renders,
@@ -621,6 +656,12 @@ dom.fitBtn.addEventListener('click', async () => {
     },
   });
   setState({ renderedSpec: JSON.stringify(renderSpec()) });
+});
+
+dom.fitRestore.addEventListener('click', () => {
+  if (!state.fitBase) return;
+  setState({ ...state.fitBase, fitBase: null, fitNotes: null });
+  applySize();
 });
 
 function slug(text) {
@@ -684,6 +725,8 @@ function paint() {
   dom.load.disabled = state.busy;
   dom.renderBtn.disabled = !loaded || state.busy;
   dom.fitBtn.disabled = !loaded || state.busy;
+  dom.fitRestore.hidden = !state.fitBase;
+  dom.fitRestore.disabled = state.busy;
   dom.renderLabel.textContent = state.busy
     ? 'Rendering…'
     : resultIsStale
@@ -722,7 +765,7 @@ function paint() {
   dom.rLen.textContent = `${state.duration.toFixed(2)} s`;
   dom.rFrames.textContent = String(frames);
   dom.rPlays.textContent = `${playbackSeconds().toFixed(2)} s`;
-  timeline.render(dom.video.currentTime);
+  timeline.render(playheadTime());
 
   // crop fields
   const pixels = cropPixels();

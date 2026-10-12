@@ -145,3 +145,22 @@ def test_progress_is_reported_for_each_attempt():
             on_step=lambda index, message: seen.append((index, message)))
     assert len(seen) >= 2
     assert [index for index, _ in seen] == sorted(index for index, _ in seen)
+
+
+def test_a_pessimistic_jump_is_walked_back_towards_the_target():
+    """The first render can make the clip look far harder than gentler rungs are.
+
+    Here the base render is 4x the model but every rung is 1x, so the predicted
+    jump overshoots and the first fitting attempt lands well under the target.
+    The search must spend its spare renders on a gentler rung instead of
+    returning a file much smaller than the user allowed.
+    """
+    busy, calm = fake_renderer(4.0), fake_renderer(1.0)
+    render = lambda spec: busy(spec) if spec == BASE else calm(spec)  # noqa: E731
+
+    target = int(fit.predicted_bytes(fit.apply_rung(BASE, fit.LADDER[0]), 1.0) * 1.02)
+    outcome = fit.fit(BASE, target, render, max_renders=4)
+
+    assert outcome.met is True
+    assert outcome.result.bytes <= target
+    assert outcome.result.bytes >= target * fit.GOOD_ENOUGH, outcome.notes

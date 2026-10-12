@@ -26,6 +26,7 @@ export const state = {
   loopForever: true,
   targetMB: 2,
   fitNotes: null,
+  fitBase: null,        // the user's own settings from before the last fit
   overrides: {},        // {colors, dither, bayerScale, lossy} once touched
   presets: {},          // served by /api/health
   calibration: null,    // measured bpp ratio for the loaded video
