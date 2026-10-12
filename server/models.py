@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 # max_colors, dither, bayer_scale, gifsicle lossy level
 PRESETS: dict[str, dict] = {
     "max": {"colors": 256, "dither": "sierra2_4a", "bayer_scale": 3, "lossy": 0},
+    "high": {"colors": 224, "dither": "sierra2_4a", "bayer_scale": 3, "lossy": 20},
     "balanced": {"colors": 200, "dither": "bayer", "bayer_scale": 3, "lossy": 40},
     "small": {"colors": 128, "dither": "bayer", "bayer_scale": 4, "lossy": 80},
     "tiny": {"colors": 64, "dither": "bayer", "bayer_scale": 5, "lossy": 120},

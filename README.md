@@ -9,6 +9,15 @@ committing, then download or copy the result.
 ./run.sh          # → http://127.0.0.1:8420
 ```
 
+### Windows (PowerShell)
+
+```powershell
+cd D:\Vsetko\Coding\gif-youtube-extract
+.\.venv\Scripts\python.exe -m uvicorn server.app:app --host 127.0.0.1 --port 8420
+```
+
+Then open <http://127.0.0.1:8420>. Stop the server with `Ctrl+C`.
+
 ## Requirements
 
 ```bash

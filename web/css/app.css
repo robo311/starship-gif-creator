@@ -932,6 +932,26 @@ button:disabled,
 }
 .clock b { color: var(--text); font-weight: 500; }
 .clock i { color: var(--line); font-style: normal; }
+.volume-control {
+  width: 112px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.volume-control svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.volume-control .volume-waves { transition: opacity 180ms ease; }
+.volume-control.is-muted .volume-waves { opacity: .18; }
+.volume-control input[type=range] { min-width: 0; height: 24px; }
 .spacer { flex: 1 1 auto; }
 
 .check {
@@ -1716,33 +1736,174 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
 .switch input:disabled + i { opacity: .4; }
 .switch:has(input:disabled) { cursor: not-allowed; }
 
-/* quality presets and advanced encoding */
+/* quality presets and advanced encoding
+ *
+ * The five presets are one ladder, not five unrelated buttons, so they read as
+ * a slider: a rail, a circle per level, and a fill that stops at the chosen
+ * one. --level-tint carries the whole thing — rail, dots, labels — and drifts
+ * from warm at Tiny to cool at Max, which is the only colour in the panel that
+ * moves. It is registered so the shift interpolates instead of snapping. */
 
-.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.presets button {
+@property --level-tint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f2f0ed;
+}
+
+.levels {
+  --level-tint: var(--accent);
+  --fill: 50%;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 3px 0 1px;
+  /* The whole row is one target: press or drag anywhere, including the rail and
+   * the labels. pan-y leaves vertical scrolling to the panel and gives us the
+   * horizontal drag, so a touch drag never fights the scroll. */
+  cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  transition: --level-tint 520ms var(--ease-soft);
+}
+.levels[data-level="0"] { --fill: 0%;   --level-tint: #d6b49a; }
+.levels[data-level="1"] { --fill: 25%;  --level-tint: #ddccbd; }
+.levels[data-level="2"] { --fill: 50%;  --level-tint: #eae7e1; }
+.levels[data-level="3"] { --fill: 75%;  --level-tint: #cfd8dd; }
+.levels[data-level="4"] { --fill: 100%; --level-tint: #b6c9d8; }
+
+[data-theme="light"] .levels[data-level="0"] { --level-tint: #8a5c34; }
+[data-theme="light"] .levels[data-level="1"] { --level-tint: #6b5240; }
+[data-theme="light"] .levels[data-level="2"] { --level-tint: #22221f; }
+[data-theme="light"] .levels[data-level="3"] { --level-tint: #35495a; }
+[data-theme="light"] .levels[data-level="4"] { --level-tint: #274a66; }
+
+/* The first and last dot sit at the centre of their column, so the rail spans
+ * from a tenth in to a tenth from the end. */
+.levels-rail {
+  position: absolute;
+  /* 3px of the row's own padding, 2px of dot margin, half of an 11px dot, less
+   * half of the rail: the rail runs dead through the middle of the circles. */
+  top: 9px;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  border-radius: var(--pill);
+  background: var(--surface-hover);
+}
+.levels-rail i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fill);
+  border-radius: var(--pill);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--level-tint) 34%, transparent) 0%,
+    var(--level-tint) 26%,
+    color-mix(in srgb, var(--level-tint) 40%, transparent) 52%,
+    var(--level-tint) 78%,
+    color-mix(in srgb, var(--level-tint) 34%, transparent) 100%
+  );
+  background-size: 260% 100%;
+  animation: level-flow 5.4s linear infinite;
+  transition: width 480ms var(--ease-out);
+}
+/* Travels leftwards, so the light appears to run up the ladder. */
+@keyframes level-flow {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+
+.levels button {
+  position: relative;
   min-width: 0;
-  padding: 11px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
+  padding: 0;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+}
+.levels button i {
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  transition: background 260ms ease, transform 300ms var(--ease-out), box-shadow 260ms ease;
+}
+.levels button b {
   color: var(--muted);
-  transition: color 180ms ease, border-color 180ms ease, background 180ms ease, transform 180ms var(--ease-out);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: -.015em;
+  transition: color 220ms ease;
 }
-.presets button b { color: var(--text-soft); font-size: 12.5px; font-weight: 700; letter-spacing: -.015em; }
-.presets button span { font-size: 10.5px; }
-.presets button:hover { border-color: var(--line); }
-.presets button:active { transform: scale(.98); }
-.presets button.on {
-  border-color: var(--surface-on);
-  background: var(--surface-on);
-  box-shadow: 0 2px 10px var(--shadow-soft);
+/* Levels below the chosen one stay lit, so the fill reads as a path travelled. */
+.levels button.past i { background: color-mix(in srgb, var(--level-tint) 72%, var(--surface-hover)); }
+.levels button.past b { color: var(--text-soft); }
+
+.levels button.on i {
+  background: var(--level-tint);
+  transform: scale(1.5);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--level-tint) 16%, transparent), 0 2px 8px var(--shadow-soft);
 }
-.presets button.on b { color: var(--text); }
-.presets button.on span { color: var(--text-soft); }
+.levels button.on b { color: var(--text); }
+
+/* Hover has to out-specify .past, or pointing at a lit dot would dim it. The
+ * chosen dot is excluded: it is already at its brightest and its largest. */
+.levels button:hover:not(.on) i {
+  background: color-mix(in srgb, var(--level-tint) 88%, var(--surface-hover));
+  transform: scale(1.22);
+}
+.levels button:hover:not(.on) b { color: var(--text); }
+.levels button:active:not(.on) i { transform: scale(1.04); }
+.levels button:focus-visible { outline: 0; }
+.levels button:focus-visible i { outline: 2px solid var(--accent-soft); outline-offset: 3px; }
+
+/* Mid-drag the handle must sit under the finger, so the easing that makes a
+ * click feel considered is exactly what makes a drag feel broken. Drop it, and
+ * lift the handle instead — the only cue that it is being carried. */
+.levels.dragging { cursor: grabbing; }
+.levels.dragging .levels-rail i { transition: none; }
+.levels.dragging button i { transition: background 140ms ease, transform 140ms var(--ease-out), box-shadow 140ms ease; }
+.levels.dragging button.on i {
+  transform: scale(1.7);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--level-tint) 14%, transparent), 0 3px 12px var(--shadow);
+}
+.levels.dragging button.on::before { animation-play-state: paused; }
+.levels.dragging button:hover:not(.on) i { transform: none; }
+/* A halo that breathes on the chosen dot: the flow has to land somewhere. */
+.levels button.on::before {
+  content: "";
+  position: absolute;
+  top: 7.5px;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--level-tint) 30%, transparent) 0%, transparent 66%);
+  animation: level-halo 3.2s var(--ease-soft) infinite;
+  pointer-events: none;
+}
+@keyframes level-halo {
+  0%, 100% { transform: scale(.8); opacity: .45; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.levels-note {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: center;
+  transition: color 220ms ease;
+}
+
+/* The global reduced-motion block below stops the flow and the breathing; this
+ * only settles the halo at a resting size rather than wherever it stopped. */
+@media (prefers-reduced-motion: reduce) {
+  .levels button.on::before { animation: none; transform: scale(1); opacity: .7; }
+}
 
 .advanced {
   margin-top: 2px;
@@ -2019,6 +2180,7 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   .viewport { min-height: 190px; }
   .placeholder > span { max-width: 280px; }
   .transport { flex-wrap: wrap; padding: 6px 0; }
+  .volume-control { width: 104px; }
   .loop-check { margin-left: auto; }
   .transport > .spacer { display: none; }
   .mark-controls { width: 100%; overflow-x: auto; }

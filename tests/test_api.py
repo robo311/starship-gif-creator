@@ -30,7 +30,7 @@ def await_job(client, job_id, timeout=180):
 def test_health_reports_the_tools_and_the_size_model(client):
     body = client.get("/api/health").json()
     assert body["ok"] is True, f"missing tools: {body['missing']}"
-    assert set(body["presets"]) == {"max", "balanced", "small", "tiny"}
+    assert set(body["presets"]) == {"max", "high", "balanced", "small", "tiny"}
     assert body["model"]["headerBytes"] > 0
     assert "bayer" in body["model"]["ditherBpp"]
 
@@ -41,6 +41,7 @@ def test_index_page_is_served(client):
     assert "Starship" in response.text
     assert "application/ld+json" in response.text
     assert 'data-size="auto"' in response.text
+    assert 'data-preset="high"' in response.text
 
 
 def test_brand_and_discovery_assets_are_served(client):

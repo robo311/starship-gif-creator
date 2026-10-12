@@ -17,7 +17,7 @@ const dom = {
   themeColor: el('theme-color'),
   viewport: el('viewport'), video: el('video'), overlay: el('overlay'),
   veil: el('veil'), veilText: el('veil-text'), veilFill: el('veil-fill'),
-  play: el('play'), now: el('now'), total: el('total'), loop: el('loop'),
+  play: el('play'), now: el('now'), total: el('total'), volume: el('volume'), loop: el('loop'),
   stepBack: el('step-back'), stepFwd: el('step-fwd'),
   markIn: el('mark-in'), markOut: el('mark-out'),
   zoomFit: el('zoom-fit'), viewLabel: el('view-label'),
@@ -35,7 +35,7 @@ const dom = {
   boomerang: el('boomerang'), loopForever: el('loop-forever'),
   sharpen: el('sharpen'), sharpenOut: el('sharpen-out'),
   targetMB: el('target-mb'), fitBtn: el('fit'), fitNote: el('fit-note'),
-  presets: el('presets'), qualitySummary: el('quality-summary'),
+  presets: el('presets'), presetNote: el('preset-note'), qualitySummary: el('quality-summary'),
   dedupe: el('dedupe'), dedupeHint: el('dedupe-hint'),
   colors: el('colors'), colorsOut: el('colors-out'),
   lossy: el('lossy'), lossyOut: el('lossy-out'),
@@ -308,11 +308,26 @@ dom.video.addEventListener('error', () => {
   if (dom.video.src) notify('The browser could not play the downloaded file. Try loading it again at a lower quality.');
 });
 
+function syncVolume() {
+  const percent = Math.round((dom.video.muted ? 0 : dom.video.volume) * 100);
+  dom.volume.value = String(percent);
+  dom.volume.setAttribute('aria-valuetext', `${percent} percent`);
+  dom.volume.closest('.volume-control').classList.toggle('is-muted', percent === 0);
+  syncRanges();
+}
+
+dom.volume.addEventListener('input', () => {
+  dom.video.muted = false;
+  dom.video.volume = Number(dom.volume.value) / 100;
+});
+dom.video.addEventListener('volumechange', syncVolume);
+
 dom.loop.addEventListener('change', () => setState({ loop: dom.loop.checked }));
 
 dom.markIn.addEventListener('click', () => {
-  const start = Math.min(dom.video.currentTime, Math.max(0, videoDuration() - 0.1));
-  setState({ start, duration: Math.max(0.1, Math.min(state.duration, videoDuration() - start)) });
+  const end = clipEnd();
+  const start = Math.max(0, end - 60, Math.min(dom.video.currentTime, end - 0.1));
+  setState({ start, duration: end - start });
 });
 
 dom.markOut.addEventListener('click', () => {
@@ -446,10 +461,76 @@ dom.boomerang.addEventListener('change', () => setState({ boomerang: dom.boomera
 dom.loopForever.addEventListener('change', () => setState({ loopForever: dom.loopForever.checked }));
 dom.targetMB.addEventListener('change', () => setState({ targetMB: Number(dom.targetMB.value) || 2 }));
 
+// The quality presets are a ladder, lightest first, drawn as a slider.
+const PRESET_LEVELS = ['tiny', 'small', 'balanced', 'high', 'max'];
+
+/** Move to a preset. Choosing one discards manual tweaks, as "preset" implies. */
+const pickPreset = (preset) => setState({ preset, overrides: {} });
+
 dom.presets.addEventListener('click', (event) => {
-  const preset = event.target.dataset?.preset;
-  // Choosing a preset discards manual tweaks, which is what "preset" implies.
-  if (preset) setState({ preset, overrides: {} });
+  const preset = event.target.closest('button[data-preset]')?.dataset.preset;
+  if (preset) pickPreset(preset);
+});
+
+// Drag the handle along the rail. The dots sit at the centre of their columns,
+// so the rail itself spans level 0 to level 4 and the pointer maps onto it
+// directly — snapping to the nearest level rather than landing between two.
+const levelAt = (clientX) => {
+  const rail = dom.presets.querySelector('.levels-rail').getBoundingClientRect();
+  const last = PRESET_LEVELS.length - 1;
+  const ratio = rail.width ? (clientX - rail.left) / rail.width : 0;
+  return Math.min(last, Math.max(0, Math.round(ratio * last)));
+};
+
+/** Snap to whichever level the pointer is nearest, if that is a move at all. */
+const dragTo = (clientX) => {
+  const preset = PRESET_LEVELS[levelAt(clientX)];
+  if (preset !== state.preset) pickPreset(preset);
+};
+
+let dragging = false;
+
+dom.presets.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  dragging = true;
+  // Capture on the row, so the drag survives leaving it — a pointer that slips
+  // off the panel should still be steering the handle.
+  dom.presets.setPointerCapture(event.pointerId);
+  dom.presets.classList.add('dragging');
+  dragTo(event.clientX);
+});
+
+dom.presets.addEventListener('pointermove', (event) => {
+  if (dragging) dragTo(event.clientX);
+});
+
+const endDrag = () => {
+  if (!dragging) return;
+  dragging = false;
+  dom.presets.classList.remove('dragging');
+  // Hand focus to where the drag left off, so arrow keys carry on from there.
+  dom.presets.querySelector(`[data-preset="${state.preset}"]`)?.focus();
+};
+
+dom.presets.addEventListener('pointerup', endDrag);
+dom.presets.addEventListener('pointercancel', endDrag);
+// Insurance: if capture is torn away without a pointerup, the row must not be
+// left thinking a finger is still on it. Re-entry after pointerup is a no-op.
+dom.presets.addEventListener('lostpointercapture', endDrag);
+
+// Arrow keys walk the ladder, which is what a slider-shaped control promises.
+dom.presets.addEventListener('keydown', (event) => {
+  const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[event.key];
+  const last = PRESET_LEVELS.length - 1;
+  const at = PRESET_LEVELS.indexOf(state.preset);
+  let next = null;
+  if (step) next = Math.min(last, Math.max(0, at + step));
+  else if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = last;
+  if (next === null) return;
+  event.preventDefault();
+  pickPreset(PRESET_LEVELS[next]);
+  dom.presets.querySelector(`[data-preset="${PRESET_LEVELS[next]}"]`).focus();
 });
 
 dom.dedupe.addEventListener('change', () => setState({ dedupe: dom.dedupe.checked }));
@@ -726,8 +807,17 @@ function paint() {
   dom.dedupeHint.textContent = state.boomerang
     ? 'Unavailable with ping-pong: reversing needs evenly timed frames.'
     : 'Removes repeated frames and stretches the remaining delays, so static shots shrink without changing the playback speed.';
-  for (const button of dom.presets.children) {
-    button.classList.toggle('on', button.dataset.preset === state.preset);
+  const level = PRESET_LEVELS.indexOf(state.preset);
+  dom.presets.dataset.level = level;
+  for (const button of dom.presets.querySelectorAll('button[data-preset]')) {
+    const at = PRESET_LEVELS.indexOf(button.dataset.preset);
+    const chosen = at === level;
+    button.classList.toggle('on', chosen);
+    button.classList.toggle('past', at < level);
+    button.setAttribute('aria-checked', String(chosen));
+    // One tab stop for the whole ladder; arrows move within it.
+    button.tabIndex = chosen ? 0 : -1;
+    if (chosen) dom.presetNote.textContent = button.dataset.note;
   }
   dom.qualitySummary.textContent = state.preset === 'max' ? 'max detail' : state.preset;
   dom.colors.value = active.colors;

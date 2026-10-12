@@ -194,6 +194,13 @@ try {
           </button>
         </div>
         <span class="clock"><b id="now">0:00.00</b><i>/</i><span id="total">0:00.00</span></span>
+        <label class="volume-control" title="Video volume">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M3.5 8h3l4-3.5v11L6.5 12h-3Z"/>
+            <path class="volume-waves" d="M13 7.2a4 4 0 0 1 0 5.6M15 5a7 7 0 0 1 0 10"/>
+          </svg>
+          <input id="volume" type="range" min="0" max="100" step="1" value="100" aria-label="Video volume" aria-valuetext="100 percent">
+        </label>
         <label class="check loop-check"><input type="checkbox" id="loop" checked><span>Loop the selection</span></label>
         <span class="spacer"></span>
         <div class="mark-controls" role="group" aria-label="Clip marks">
@@ -363,12 +370,15 @@ try {
         <i aria-hidden="true"></i>
       </summary>
       <div class="group-body">
-        <div class="presets" id="presets" role="radiogroup" aria-label="Quality preset">
-          <button data-preset="max" type="button"><b>Max</b><span>Every detail</span></button>
-          <button data-preset="balanced" class="on" type="button"><b>Balanced</b><span>Best default</span></button>
-          <button data-preset="small" type="button"><b>Small</b><span>Easy to share</span></button>
-          <button data-preset="tiny" type="button"><b>Tiny</b><span>Minimum weight</span></button>
+        <div class="levels" id="presets" data-level="2" role="radiogroup" aria-label="Quality preset">
+          <span class="levels-rail" aria-hidden="true"><i></i></span>
+          <button data-preset="tiny" data-note="Minimum weight" type="button" role="radio" aria-checked="false" tabindex="-1"><i aria-hidden="true"></i><b>Tiny</b></button>
+          <button data-preset="small" data-note="Easy to share" type="button" role="radio" aria-checked="false" tabindex="-1"><i aria-hidden="true"></i><b>Small</b></button>
+          <button data-preset="balanced" data-note="Best default" class="on" type="button" role="radio" aria-checked="true"><i aria-hidden="true"></i><b>Balanced</b></button>
+          <button data-preset="high" data-note="More detail" type="button" role="radio" aria-checked="false" tabindex="-1"><i aria-hidden="true"></i><b>High</b></button>
+          <button data-preset="max" data-note="Every detail" type="button" role="radio" aria-checked="false" tabindex="-1"><i aria-hidden="true"></i><b>Max</b></button>
         </div>
+        <p class="levels-note" id="preset-note">Best default</p>
         <label class="slider">
           <span>Sharpen <small>Recover downscaled detail</small></span>
           <output id="sharpen-out">0.0</output>

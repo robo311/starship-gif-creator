@@ -58,12 +58,13 @@ def test_higher_fps_yields_more_frames(synthetic_video, out_dir):
 
 def test_smaller_presets_produce_smaller_files(synthetic_video, out_dir):
     sizes = {}
-    for preset in ("max", "balanced", "small", "tiny"):
+    for preset in ("max", "high", "balanced", "small", "tiny"):
         spec = RenderSpec(video_id=SYNTHETIC_ID, start=0.5, duration=1.0, fps=12,
                           width=160, height=120, preset=preset)
         sizes[preset] = render(spec, synthetic_video, out_dir).bytes
 
     assert sizes["max"] > sizes["tiny"], sizes
+    assert sizes["high"] >= sizes["balanced"], sizes
     assert sizes["balanced"] >= sizes["small"], sizes
 
 

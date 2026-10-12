@@ -48,7 +48,7 @@ def test_unknown_preset_and_dither_are_rejected():
 
 
 def test_presets_get_progressively_smaller():
-    order = ["max", "balanced", "small", "tiny"]
+    order = ["max", "high", "balanced", "small", "tiny"]
     colors = [PRESETS[name]["colors"] for name in order]
     lossy = [PRESETS[name]["lossy"] for name in order]
     assert colors == sorted(colors, reverse=True)
