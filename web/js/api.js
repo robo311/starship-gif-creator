@@ -23,6 +23,8 @@ export const startRender = (spec) => postJSON('/api/render', spec);
 export const startFit = (spec, targetBytes) =>
   postJSON('/api/fit', { spec, target_bytes: Math.round(targetBytes) });
 export const estimateSize = (spec) => postJSON('/api/estimate', { spec });
+export const startTrack = (request) => postJSON('/api/track', request);
+export const cancelJob = (jobId) => postJSON(`/api/job/${jobId}/cancel`, {});
 
 /**
  * Poll a background job until it finishes.
@@ -34,6 +36,7 @@ export async function awaitJob(jobId, onProgress, intervalMs = 300) {
     if (onProgress) onProgress(job.percent ?? 0, job.message || '');
     if (job.state === 'done') return job.result;
     if (job.state === 'error') throw new Error(job.error || 'The job failed.');
+    if (job.state === 'cancelled') throw Object.assign(new Error('Cancelled.'), { cancelled: true });
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }

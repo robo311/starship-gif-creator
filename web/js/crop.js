@@ -19,7 +19,9 @@ const CURSORS = {
   move: 'move',
 };
 
-export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTargetAspect }) {
+export function initCrop({
+  canvas, video, getCrop, setCrop, getLockRatio, getTargetAspect, onCommit = () => {},
+}) {
   const ctx = canvas.getContext('2d');
   let drag = null;
   let hover = null;
@@ -91,7 +93,7 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
       // in a letterbox bar anchors at the nearest frame edge instead.
       const anchor = insideBox(point, box);
       drag = { mode: 'new', anchor, box };
-      setCrop(toNormalised(fitDrawn({ x: anchor.x, y: anchor.y, w: MIN_SIDE, h: MIN_SIDE }, box), box));
+      setCrop(toNormalised(fitDrawn({ x: anchor.x, y: anchor.y, w: MIN_SIDE, h: MIN_SIDE }, box), box), 'new');
     }
     draw();
   });
@@ -121,7 +123,7 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
         const anchor = (point.x < drag.anchor.x ? 'w' : 'e') + (point.y < drag.anchor.y ? 'n' : 's');
         rect = applyAspect(rect, getTargetAspect(), anchor);
       }
-      setCrop(toNormalised(fitDrawn(rect, box), box));
+      setCrop(toNormalised(fitDrawn(rect, box), box), 'new');
     } else if (drag.mode === 'move') {
       const moved = {
         ...drag.origin,
@@ -145,6 +147,7 @@ export function initCrop({ canvas, video, getCrop, setCrop, getLockRatio, getTar
     }
     drag = null;
     if (event && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    onCommit();
     draw();
   }
 

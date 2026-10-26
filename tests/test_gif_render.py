@@ -92,3 +92,38 @@ def test_a_bad_source_path_raises_a_command_failure(out_dir):
     spec = RenderSpec(video_id="nope", duration=0.5, fps=10, width=64, height=48)
     with pytest.raises(media.CommandFailed):
         render(spec, Path("/nonexistent/missing.mp4"), out_dir)
+
+
+def test_a_sequence_joins_its_parts_into_one_gif(synthetic_video, out_dir):
+    """Late part first, early part second: one GIF as long as both together."""
+    spec = RenderSpec(
+        video_id=SYNTHETIC_ID, fps=10, width=96, height=72,
+        segments=[{"start": 3.0, "duration": 0.6}, {"start": 0.2, "duration": 0.8}],
+    )
+    result = render(spec, synthetic_video, out_dir)
+    assert 13 <= result.frames <= 15
+    assert (result.width, result.height) == (96, 72)
+
+
+def test_a_sequence_with_its_own_crops_renders_every_part(synthetic_video, out_dir):
+    parts = [
+        {"start": 2.0, "duration": 0.5, "crop": {"x": 0, "y": 0, "width": 300, "height": 220}},
+        {"start": 0.5, "duration": 0.5, "crop": {"x": 20, "y": 20, "width": 300, "height": 220}},
+    ]
+    spec = RenderSpec(video_id=SYNTHETIC_ID, fps=10, width=150, height=110, sharpen=0.5, segments=parts)
+    result = render(spec, synthetic_video, out_dir)
+    assert (result.width, result.height) == (150, 110)
+    assert 9 <= result.frames <= 11
+    # The boomerang's split/reverse must still attach to the joined stream.
+    render(spec.model_copy(update={"boomerang": True}), synthetic_video, out_dir)
+
+
+def test_an_mp4_render_is_a_real_smaller_video(synthetic_video, out_dir):
+    common = dict(video_id=SYNTHETIC_ID, start=0.5, duration=2.0, fps=15, width=160, height=120)
+    as_gif = render(RenderSpec(**common), synthetic_video, out_dir)
+    as_mp4 = render(RenderSpec(**common, format="mp4"), synthetic_video, out_dir)
+    assert as_mp4.name.endswith(".mp4") and as_mp4.format == "mp4"
+    assert (as_mp4.width, as_mp4.height) == (160, 120)
+    assert 28 <= as_mp4.frames <= 32
+    assert as_mp4.bytes < as_gif.bytes
+    assert (out_dir / as_mp4.name).read_bytes()[4:8] == b"ftyp"

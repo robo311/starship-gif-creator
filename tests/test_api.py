@@ -273,3 +273,29 @@ def test_unknown_job_is_a_404(client):
 
 def test_load_rejects_an_empty_url(client):
     assert client.post("/api/load", json={"url": "   "}).status_code == 400
+
+
+def test_health_lists_the_features_the_page_depends_on(client):
+    features = client.get("/api/health").json()["features"]
+    assert {"segments", "track", "zoom", "cancel"} <= set(features)
+
+
+def test_cancelling_an_unknown_job_is_a_404(client):
+    assert client.post("/api/job/nope/cancel").status_code == 404
+
+
+def test_an_mp4_fits_its_target_through_the_bitrate(client):
+    target = 30_000
+    spec = {**SPEC, "format": "mp4", "width": 320, "height": 240, "fps": 25, "duration": 3.0, "preset": "max"}
+    result = await_job(client, client.post("/api/fit", json={"spec": spec, "target_bytes": target}).json()["job_id"])
+    assert result["met"] is True and result["bytes"] <= target
+    assert result["spec"]["bitrate_kbps"]
+    served = client.get(result["gif_url"])
+    assert served.status_code == 200 and served.headers["content-type"] == "video/mp4"
+
+
+def test_an_mp4_render_does_not_recalibrate_the_gif_estimate(client):
+    before = client.post("/api/estimate", json={"spec": SPEC}).json()["calibration"]
+    result = await_job(client, client.post("/api/render", json={**SPEC, "format": "mp4"}).json()["job_id"])
+    assert result["format"] == "mp4"
+    assert client.post("/api/estimate", json={"spec": SPEC}).json()["calibration"] == before

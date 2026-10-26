@@ -774,6 +774,49 @@ button:disabled,
 #video { object-fit: contain; display: block; }
 #overlay { cursor: crosshair; touch-action: none; }
 
+/* The magnifier: the stage grows past the viewport and the viewport scrolls
+ * over it. Growing the real size, rather than scaling with a transform, keeps
+ * the crop overlay's pointer maths and its drawing exact at every zoom. */
+.stage-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  scrollbar-width: thin;
+}
+.stage-scroll.is-zoomed { overflow: auto; }
+.stage {
+  position: relative;
+  width: calc(100% * var(--view-zoom, 1));
+  height: calc(100% * var(--view-zoom, 1));
+}
+
+.view-zoom {
+  position: absolute;
+  z-index: 4;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px var(--shadow-soft);
+}
+.view-zoom button {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-soft);
+  font: 500 12px/1 var(--mono);
+}
+.view-zoom button:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.view-zoom button:disabled { opacity: .35; }
+
 .placeholder {
   position: absolute;
   inset: 0;
@@ -1169,6 +1212,100 @@ button:disabled,
 }
 .hint { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
 .track-hint { padding: 9px 4px 0; }
+
+/* Parts already in the sequence, drawn under the live selection so the user
+ * can see where each one came from. They never take the pointer. */
+.part-marks { position: absolute; inset: var(--lane) 0 0; pointer-events: none; }
+.part-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--text-soft);
+  border-right: 1px dashed var(--text-soft);
+  background: var(--accent-wash);
+}
+.part-mark b {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  color: var(--text-soft);
+  font: 500 10px/1 var(--mono);
+}
+.part-mark.active { display: none; }
+
+/* ── sequence ────────────────────────────────────────────────────────── */
+
+.sequence {
+  margin-top: 4px;
+  padding: 12px 16px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+.sequence-head { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.sequence-head h2 {
+  margin: 0 8px 0 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sequence-head h2 em {
+  margin-left: 8px;
+  color: var(--muted);
+  font: 400 11px/1 var(--mono);
+  font-style: normal;
+}
+
+.parts {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+.parts:empty { display: none; }
+
+.part {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  cursor: grab;
+  user-select: none;
+  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+.part:hover { border-color: var(--text-soft); }
+.part.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.part.playing { background: var(--surface-on); }
+.part.dragging { opacity: .4; }
+.part.drop-before { box-shadow: -3px 0 0 var(--accent); }
+.part.drop-after { box-shadow: 3px 0 0 var(--accent); }
+.part-index { color: var(--muted); font: 500 11px/1 var(--mono); }
+.part-range { display: flex; flex-direction: column; gap: 3px; }
+.part-range b { color: var(--text); font: 500 12px/1 var(--mono); }
+.part-range small { color: var(--muted); font: 400 10px/1 var(--mono); }
+.part-tools { display: flex; gap: 1px; }
+.part-tools button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+.part-tools button:hover:not(:disabled) { color: var(--text); background: var(--surface-hover); }
+.part-tools button:disabled { opacity: .3; }
+#sequence-hint { padding: 9px 4px 0; }
+
+.speed-preview { justify-self: start; align-self: start; }
 
 /* ── result ──────────────────────────────────────────────────────────── */
 
@@ -2205,3 +2342,96 @@ input[type=range]:disabled { cursor: not-allowed; opacity: .45; }
   }
   .depth { display: none; }
 }
+
+/* ── follow target and zoom effect ───────────────────────────────────── */
+
+.follow { display: grid; gap: 8px; padding-top: 2px; }
+.follow-row { display: flex; align-items: center; gap: 12px; }
+.follow-row .secondary-action { min-height: 38px; padding: 0 16px; font-size: 12.5px; }
+.follow-row .text-action { justify-self: auto; }
+
+.zoom-effect { display: grid; gap: 10px; }
+.zoom-effect-label {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.zoom-effect-label small { color: var(--muted); font-size: 11px; font-weight: 500; }
+#zoom-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#zoom-amount-row[hidden] { display: none; }
+
+.quiet-button.is-strong { color: var(--text); background: var(--surface-raised); }
+.part-tools button[data-act="preview"] { width: auto; padding: 0 7px; font: 500 10.5px/1 var(--mono); }
+.part-badges { display: flex; gap: 4px; }
+.part-badges i {
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font: 500 9.5px/1 var(--mono);
+  font-style: normal;
+}
+
+.veil-cancel {
+  margin-top: 14px;
+  height: 32px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--pill);
+  background: var(--surface-raised);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: auto;
+}
+.veil-cancel:hover:not(:disabled) { color: var(--text); background: var(--surface-hover); }
+.veil-cancel:disabled { opacity: .5; }
+
+/* Guiding: the crop is steered by the pointer, so nothing on the video may
+ * take the press, and the cursor says what is going on. */
+.viewport.is-guiding .stage-scroll { cursor: none; }
+.viewport.is-guiding { border-color: var(--accent); }
+.follow-row { flex-wrap: wrap; }
+
+/* ── export format ───────────────────────────────────────────────────── */
+
+.format-picks {
+  display: inline-flex;
+  align-self: center;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.format-picks button {
+  min-width: 46px;
+  height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: var(--muted);
+  font: 600 12px/1 var(--mono);
+  transition: color 160ms ease, background 160ms ease;
+}
+.format-picks button:hover:not(.on) { color: var(--text-soft); }
+.format-picks button.on { background: var(--accent); color: var(--accent-ink); }
+.result-actions { flex-wrap: wrap; }
+#mp4 { display: block; max-width: 100%; height: auto; }
+#mp4[hidden] { display: none; }
+
+.source-quality { align-self: center; padding: 0 6px; white-space: nowrap; }
+.source-quality[hidden] { display: none; }
+#size-presets { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.slider-ticks[hidden] { display: none; }
+
+.mp4-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#gif-group[hidden], #mp4-group[hidden] { display: none; }
+

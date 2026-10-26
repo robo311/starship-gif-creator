@@ -13,9 +13,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import estimate, fit, gif, media, sources
-from .jobs import registry
-from .models import PRESETS, RenderResult, RenderSpec, VideoMeta
+from . import estimate, fit, gif, media, sources, track
+from .jobs import Cancelled, current_cancel, registry
+from .models import PRESETS, Crop, RenderResult, RenderSpec, VideoMeta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CACHE_DIR = Path(os.environ.get("STARSHIP_CACHE_DIR") or BASE_DIR / "cache")
@@ -24,6 +24,7 @@ GIF_DIR = CACHE_DIR / "gifs"
 WEB_DIR = BASE_DIR / "web"
 
 REQUIRED_BINARIES = ["ffmpeg", "ffprobe", "yt-dlp", "gifsicle"]
+FEATURES = ["segments", "track", "zoom", "cancel", "mp4", "source-quality"]
 CHUNK = 512 * 1024
 
 app = FastAPI(
@@ -55,8 +56,11 @@ def _source_for(video_id: str) -> tuple[Path, media.Probe]:
 
 def _spawn(target, job_id: str) -> None:
     def runner() -> None:
+        current_cancel.set(registry.cancel_flag(job_id))
         try:
             target()
+        except Cancelled:
+            pass  # the registry already says so
         except Exception as exc:  # surfaced verbatim to the UI
             registry.fail(job_id, sources.public_error_message(exc))
 
@@ -130,6 +134,15 @@ class EstimateRequest(BaseModel):
     spec: RenderSpec
 
 
+class TrackRequest(BaseModel):
+    video_id: str
+    start: float = Field(ge=0)
+    duration: float = Field(gt=0, le=60)
+    crop: Crop
+    # Source seconds at which `crop` frames the target; defaults to `start`.
+    anchor: float | None = Field(default=None, ge=0)
+
+
 class FitRequest(BaseModel):
     spec: RenderSpec
     target_bytes: int = Field(ge=10_000, le=200_000_000)
@@ -148,6 +161,10 @@ def health() -> dict:
     return {
         "ok": not missing,
         "missing": missing,
+        # What this server can do. The page compares it with what it expects, so
+        # a server left running on older code is caught instead of quietly
+        # ignoring fields it does not know.
+        "features": FEATURES,
         "hints": [media.INSTALL_HINT.get(name, "") for name in missing],
         "presets": PRESETS,
         "model": {
@@ -191,6 +208,13 @@ def job(job_id: str) -> dict:
     return found
 
 
+@app.post("/api/job/{job_id}/cancel")
+def cancel_job(job_id: str) -> dict:
+    if registry.get(job_id) is None:
+        raise HTTPException(404, "Unknown job.")
+    return {"cancelled": registry.cancel(job_id)}
+
+
 @app.post("/api/estimate")
 def estimate_size(body: EstimateRequest) -> dict:
     spec = body.spec
@@ -221,8 +245,9 @@ def _remember_calibration(spec: RenderSpec, result: RenderResult) -> float:
 @app.post("/api/render")
 def render(spec: RenderSpec) -> dict:
     source, info = _source_for(spec.video_id)
-    if spec.start >= info.duration > 0:
+    if any(clip.start >= info.duration > 0 for clip in spec.clips()):
         raise HTTPException(400, "The clip starts after the end of the video.")
+    spec = spec.model_copy(update={"source_fps": info.fps or None})
 
     job_id = registry.create("render")
     registry.update(job_id, state="running", message="Queued", percent=2)
@@ -235,7 +260,10 @@ def render(spec: RenderSpec) -> dict:
             spec, source, GIF_DIR, info.width, info.height, on_progress
         )
         payload = result.model_dump()
-        payload["calibration"] = _remember_calibration(spec, result)
+        # The size model describes GIFs; an MP4 would only mislead it.
+        payload["calibration"] = (
+            _remember_calibration(spec, result) if spec.format == "gif" else _calibration.get(spec.video_id)
+        )
         registry.finish(job_id, payload)
 
     _spawn(work, job_id)
@@ -245,13 +273,16 @@ def render(spec: RenderSpec) -> dict:
 @app.post("/api/fit")
 def fit_to_target(body: FitRequest) -> dict:
     """Render repeatedly, shedding quality only as needed, until it fits."""
-    spec = body.spec
-    source, info = _source_for(spec.video_id)
+    source, info = _source_for(body.spec.video_id)
+    spec = body.spec.model_copy(update={"source_fps": info.fps or None})
 
     job_id = registry.create("fit")
     registry.update(job_id, state="running", message="Queued", percent=2)
 
     def work() -> None:
+        if spec.format == "mp4":
+            fit_mp4(spec, body.target_bytes, source, info, job_id)
+            return
         attempts = max(1, body.max_renders)
 
         def render_once(candidate: RenderSpec) -> RenderResult:
@@ -280,6 +311,59 @@ def fit_to_target(body: FitRequest) -> dict:
 
     _spawn(work, job_id)
     return {"job_id": job_id}
+
+
+@app.post("/api/track")
+def follow_target(body: TrackRequest) -> dict:
+    """Track whatever sits in the middle of the crop, for a crop that follows it."""
+    source, _ = _source_for(body.video_id)
+
+    job_id = registry.create("track")
+    registry.update(job_id, state="running", message="Reading the first frame", percent=2)
+
+    def work() -> None:
+        def on_progress(percent: float, message: str) -> None:
+            registry.update(job_id, percent=round(percent, 1), message=message)
+
+        points = track.follow(source, body.start, body.duration, body.crop, body.anchor, on_progress)
+        registry.finish(job_id, {"points": [point.model_dump() for point in points]})
+
+    _spawn(work, job_id)
+    return {"job_id": job_id}
+
+
+# Container overhead and rate-control slack, so a fitted MP4 lands under the limit.
+MP4_FIT_HEADROOM = 0.92
+
+
+def fit_mp4(spec: RenderSpec, target_bytes: int, source: Path, info: media.Probe, job_id: str) -> None:
+    """An MP4 size is set by its bitrate, so one render lands on target.
+
+    If rate control overshoots anyway, a second render scales the bitrate down
+    by exactly the overshoot.
+    """
+    playback = estimate.frame_count(spec.duration, spec.fps, spec.speed, spec.boomerang) / spec.fps
+    rate = max(50, int(target_bytes * 8 * MP4_FIT_HEADROOM / max(0.1, playback) / 1000))
+    renders = 0
+    while True:
+        renders += 1
+        registry.update(job_id, percent=20 * renders, message=f"Encoding at {rate} kbit/s")
+        candidate = spec.model_copy(update={"bitrate_kbps": rate})
+        result = gif.render(candidate, source, GIF_DIR, info.width, info.height)
+        if result.bytes <= target_bytes or renders >= 3 or rate <= 50:
+            break
+        rate = max(50, int(rate * target_bytes / result.bytes * 0.95))
+
+    payload = result.model_dump()
+    payload.update({
+        "calibration": _calibration.get(spec.video_id),
+        "met": result.bytes <= target_bytes,
+        "renders": renders,
+        "notes": [f"bitrate {rate} kbit/s"],
+        "spec": candidate.model_dump(),
+        "target_bytes": target_bytes,
+    })
+    registry.finish(job_id, payload)
 
 
 @app.get("/api/video/{video_id}")
@@ -314,8 +398,8 @@ def video(
 
 @app.get("/api/gif/{name}")
 def get_gif(name: str, request: Request, download: int = 0, filename: str = "") -> Response:
-    if not re.fullmatch(r"[A-Za-z0-9_.\-]{1,120}\.gif", name):
-        raise HTTPException(400, "Malformed GIF name.")
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]{1,120}\.(gif|mp4)", name):
+        raise HTTPException(400, "Malformed file name.")
     path = GIF_DIR / name
     if not path.is_file():
         raise HTTPException(404, "That GIF is no longer in the cache. Render it again.")
@@ -324,9 +408,10 @@ def get_gif(name: str, request: Request, download: int = 0, filename: str = "") 
     if download:
         # Content-Disposition overrides the anchor's `download` attribute, so the
         # caller's preferred name has to be honoured here or it is lost.
-        suggested = filename if re.fullmatch(r"[A-Za-z0-9_.\-]{1,120}\.gif", filename) else name
+        suggested = filename if re.fullmatch(r"[A-Za-z0-9_.\-]{1,120}\.(gif|mp4)", filename) else name
         headers["Content-Disposition"] = f'attachment; filename="{suggested}"'
-    return FileResponse(path, media_type="image/gif", headers=headers)
+    media_type = "video/mp4" if path.suffix == ".mp4" else "image/gif"
+    return FileResponse(path, media_type=media_type, headers=headers)
 
 
 # --------------------------------------------------------------------------- #

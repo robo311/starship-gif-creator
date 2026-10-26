@@ -103,6 +103,10 @@ try {
         <span><kbd>←</kbd><kbd>→</kbd> Step one frame</span>
         <span><kbd>I</kbd><kbd>O</kbd> Set clip points</span>
         <span><kbd>F</kbd> Fit timeline to clip</span>
+        <span><kbd>A</kbd> Add selection to sequence</span>
+        <span><kbd>R</kbd> Render the selection alone</span>
+        <span><kbd>Esc</kbd> Cancel rendering or guiding</span>
+        <span><kbd>+</kbd><kbd>−</kbd><kbd>0</kbd> Magnify the video</span>
       </div>
     </details>
   </div>
@@ -131,6 +135,7 @@ try {
           <label class="seg"><input type="radio" name="max-height" value="480"><span>480p</span></label>
           <label class="seg"><input type="radio" name="max-height" value="720"><span>720p</span></label>
           <label class="seg"><input type="radio" name="max-height" value="1080" checked><span>1080p</span></label>
+          <label class="seg" title="Higher than 1080p arrives as VP9, which Safari may not play"><input type="radio" name="max-height" value="1440"><span>1440p</span></label>
         </fieldset>
         <button id="load" class="load-action" type="submit">
           <span>Load video</span>
@@ -155,8 +160,18 @@ try {
     <div class="canvas-zone">
       <div class="viewport-shell">
         <div class="viewport" id="viewport">
-          <video id="video" playsinline preload="auto"></video>
-          <canvas id="overlay" aria-label="Crop region. Drag to draw a crop."></canvas>
+          <div class="stage-scroll" id="stage-scroll">
+            <div class="stage" id="stage">
+              <video id="video" playsinline preload="auto"></video>
+              <canvas id="overlay" aria-label="Crop region. Drag to draw a crop."></canvas>
+            </div>
+          </div>
+
+          <div class="view-zoom" id="view-zoom" role="group" aria-label="Magnify the video" hidden>
+            <button id="view-zoom-out" type="button" aria-label="Zoom the view out" title="Zoom out (−)">−</button>
+            <button id="view-zoom-reset" type="button" title="Back to fit (0)">100%</button>
+            <button id="view-zoom-in" type="button" aria-label="Zoom the view in" title="Zoom in (+). Ctrl-scroll zooms at the pointer.">+</button>
+          </div>
 
           <div class="placeholder" id="placeholder">
             <div class="empty-frame" aria-hidden="true">
@@ -176,6 +191,7 @@ try {
             <div class="progress-orbit"><i></i></div>
             <div class="veil-text" id="veil-text">Working…</div>
             <div class="veil-bar"><i id="veil-fill"></i></div>
+            <button id="cancel-job" class="veil-cancel" type="button" hidden>Cancel <kbd>Esc</kbd></button>
           </div>
         </div>
       </div>
@@ -207,12 +223,14 @@ try {
           <button id="mark-in" class="quiet-button" type="button" title="Start the clip here (I)">Set in <kbd>I</kbd></button>
           <button id="mark-out" class="quiet-button" type="button" title="End the clip here (O)">Set out <kbd>O</kbd></button>
           <button id="zoom-fit" class="quiet-button" type="button" title="Zoom to the clip (F)">Fit clip <kbd>F</kbd></button>
+          <button id="render-selection" class="quiet-button is-strong" type="button" title="Render just the selected range as a GIF (R)" disabled>Render selection <kbd>R</kbd></button>
         </div>
       </div>
 
       <div class="timeline-wrap">
         <div class="track" id="track" role="group" aria-label="Clip selection">
           <div class="scrub" id="scrub" title="Drag to preview the video"></div>
+          <div class="part-marks" id="part-marks" aria-hidden="true"></div>
           <div class="sel" id="sel" title="Drag to move the whole clip"></div>
           <div class="handle" id="h-in" tabindex="0" role="slider" aria-label="Clip start"></div>
           <div class="handle" id="h-out" tabindex="0" role="slider" aria-label="Clip end"></div>
@@ -230,6 +248,21 @@ try {
         </div>
         <p class="hint track-hint">Drag the top strip to scrub. Move the selection, or trim from either end. Scroll to zoom, shift-scroll to pan.</p>
       </div>
+
+      <section class="sequence" id="sequence" aria-labelledby="sequence-title">
+        <div class="sequence-head">
+          <h2 id="sequence-title">Sequence <em id="sequence-summary">single clip</em></h2>
+          <span class="spacer"></span>
+          <button id="add-part" class="quiet-button" type="button" title="Add the selection as a part (A)" disabled>Add selection <kbd>A</kbd></button>
+          <button id="render-part" class="quiet-button is-strong" type="button" hidden>Render this part</button>
+          <button id="download-part" class="quiet-button is-strong" type="button" hidden>Download this part</button>
+          <button id="done-part" class="quiet-button is-strong" type="button" hidden>Done editing</button>
+          <button id="play-sequence" class="quiet-button" type="button" disabled>Play sequence</button>
+          <button id="clear-parts" class="quiet-button" type="button" hidden>Clear</button>
+        </div>
+        <ol class="parts" id="parts" aria-label="Sequence parts"></ol>
+        <p class="hint" id="sequence-hint">Pick several moments: select one, add it, select the next. The GIF plays them in this order — drag a part to move it.</p>
+      </section>
     </div>
 
     <section class="result" id="result" aria-labelledby="export-title">
@@ -254,6 +287,14 @@ try {
       </div>
 
       <div class="result-actions">
+        <div class="format-picks" id="format-picks" role="radiogroup" aria-label="Export format">
+          <button class="on" data-format="gif" type="button" role="radio" aria-checked="true" title="Plays everywhere, loops by itself">GIF</button>
+          <button data-format="mp4" type="button" role="radio" aria-checked="false" title="Far smaller, full colour; silent H.264 video">MP4</button>
+        </div>
+        <label class="check source-quality" id="source-quality-row" hidden
+               title="Native resolution, the source's frame rate and near-lossless encoding. Much bigger files.">
+          <input type="checkbox" id="mp4-source"><span>Source quality</span>
+        </label>
         <button id="render" class="primary" type="button" disabled>
           <span class="button-label">Render GIF</span>
           <span class="button-arrow" aria-hidden="true">↗</span>
@@ -265,6 +306,7 @@ try {
       <div class="preview" id="preview" hidden>
         <div class="preview-frame">
           <img id="gif" alt="Rendered GIF preview">
+          <video id="mp4" autoplay loop muted playsinline controls hidden aria-label="Rendered MP4 preview"></video>
           <span class="rendered-badge">Loop ready</span>
         </div>
         <div class="preview-meta" id="gif-meta"></div>
@@ -303,6 +345,14 @@ try {
           <label><span>H</span><input type="number" id="crop-h" min="2" step="1" placeholder="—" aria-label="Crop height"></label>
         </div>
         <button id="crop-reset" class="text-action" type="button">Use the full frame</button>
+        <div class="follow">
+          <div class="follow-row">
+            <button id="follow" class="secondary-action" type="button" disabled>Follow target</button>
+            <button id="guide" class="secondary-action" type="button" disabled>Guide with pointer</button>
+            <button id="unfollow" class="text-action" type="button" hidden>Stop following</button>
+          </div>
+          <p class="hint" id="follow-hint">Frame the person or object, then let the crop move with it through the clip.</p>
+        </div>
       </div>
     </details>
 
@@ -314,7 +364,7 @@ try {
       </summary>
       <div class="group-body">
         <div class="size-fields">
-          <label class="size-field"><span>Width</span><input type="number" id="out-w" min="16" max="1920" step="2"></label>
+          <label class="size-field"><span>Width</span><input type="number" id="out-w" min="16" max="3840" step="2"></label>
           <label class="lock-toggle" title="Keep the crop’s aspect ratio">
             <input type="checkbox" id="link-aspect" checked>
             <i aria-hidden="true">
@@ -322,7 +372,7 @@ try {
             </i>
             <span>Keep the crop’s aspect ratio</span>
           </label>
-          <label class="size-field"><span>Height</span><input type="number" id="out-h" min="16" max="1920" step="2"></label>
+          <label class="size-field"><span>Height</span><input type="number" id="out-h" min="16" max="3840" step="2"></label>
         </div>
         <p class="hint" id="aspect-note">Locked to the crop’s aspect ratio.</p>
         <div class="chip-row" id="size-presets" aria-label="Output size presets">
@@ -332,6 +382,9 @@ try {
           <button class="chip" data-w="480" type="button">480</button>
           <button class="chip" data-w="640" type="button">640</button>
           <button class="chip" data-w="800" type="button">800</button>
+          <button class="chip" data-w="1280" type="button" title="720p wide">1280</button>
+          <button class="chip" data-w="1920" type="button" title="1080p wide">1920</button>
+          <button class="chip" data-w="2560" type="button" title="1440p wide">2560</button>
         </div>
         <p class="hint" id="scale-hint"></p>
       </div>
@@ -356,6 +409,20 @@ try {
           <output id="speed-out">1.00×</output>
           <input type="range" id="speed" min="0.25" max="4" step="0.05" value="1">
         </label>
+        <label class="check speed-preview"><input type="checkbox" id="preview-speed"><span>Play the video at this speed</span></label>
+        <div class="zoom-effect">
+          <span class="zoom-effect-label">Zoom effect <small id="zoom-scope">whole clip</small></span>
+          <div class="chip-row" id="zoom-modes" role="radiogroup" aria-label="Zoom effect">
+            <button class="chip on" data-zoom="none" type="button" role="radio" aria-checked="true">None</button>
+            <button class="chip" data-zoom="in" type="button" role="radio" aria-checked="false">Zoom in</button>
+            <button class="chip" data-zoom="out" type="button" role="radio" aria-checked="false">Zoom out</button>
+          </div>
+          <label class="slider" id="zoom-amount-row">
+            <span>Zoom depth <small>how far it travels</small></span>
+            <output id="zoom-amount-out">1.30×</output>
+            <input type="range" id="zoom-amount" min="1.05" max="2.5" step="0.05" value="1.3">
+          </label>
+        </div>
         <div class="toggle-row">
           <label class="switch"><input type="checkbox" id="boomerang"><i></i><span><b>Ping-pong</b><small>Play forward, then back</small></span></label>
           <label class="switch"><input type="checkbox" id="loop-forever" checked><i></i><span><b>Loop forever</b><small>Never stops, never asks</small></span></label>
@@ -363,7 +430,7 @@ try {
       </div>
     </details>
 
-    <details class="group">
+    <details class="group" id="gif-group">
       <summary>
         <span><b>04</b> Look &amp; weight</span>
         <em id="quality-summary">balanced</em>
@@ -410,6 +477,23 @@ try {
             <button id="advanced-reset" class="text-action" type="button">Reset to preset</button>
           </div>
         </details>
+      </div>
+    </details>
+
+    <details class="group" id="mp4-group" open hidden>
+      <summary>
+        <span><b>04</b> MP4 quality</span>
+        <em id="mp4-summary">high</em>
+        <i aria-hidden="true"></i>
+      </summary>
+      <div class="group-body">
+        <div class="aspect-picks mp4-levels" id="mp4-levels" role="radiogroup" aria-label="MP4 quality">
+          <button class="aspect-pick" data-level="source" type="button" role="radio"><b>Source</b><span>as original</span></button>
+          <button class="aspect-pick" data-level="high" type="button" role="radio"><b>High</b><span>crisp</span></button>
+          <button class="aspect-pick" data-level="standard" type="button" role="radio"><b>Standard</b><span>for sharing</span></button>
+          <button class="aspect-pick" data-level="small" type="button" role="radio"><b>Small</b><span>lightest</span></button>
+        </div>
+        <p class="hint" id="mp4-level-note"></p>
       </div>
     </details>
 

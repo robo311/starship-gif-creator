@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import jobs
 
 # Homebrew installs here but a GUI-launched process often has a minimal PATH.
 EXTRA_PATHS = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
@@ -57,16 +60,30 @@ def missing_binaries(names: list[str]) -> list[str]:
 
 
 def run(argv: list[str], timeout: float = 600.0) -> str:
-    """Run to completion, raising CommandFailed on a non-zero exit."""
-    proc = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    """Run to completion, raising CommandFailed on a non-zero exit.
+
+    Inside a job, the process is watched a few times a second and killed as
+    soon as the job is cancelled, so a long encode stops promptly.
+    """
+    started = time.monotonic()
+    with subprocess.Popen(
+        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    ) as proc:
+        while True:
+            try:
+                stdout, stderr = proc.communicate(timeout=0.25)
+                break
+            except subprocess.TimeoutExpired:
+                cancelled = (flag := jobs.current_cancel.get()) is not None and flag.is_set()
+                if cancelled or time.monotonic() - started > timeout:
+                    proc.kill()
+                    proc.communicate()
+                    if cancelled:
+                        raise jobs.Cancelled() from None
+                    raise subprocess.TimeoutExpired(argv, timeout) from None
     if proc.returncode != 0:
-        raise CommandFailed(argv, proc.returncode, proc.stderr or proc.stdout)
-    return proc.stdout
+        raise CommandFailed(argv, proc.returncode, stderr or stdout)
+    return stdout
 
 
 @dataclass(frozen=True)

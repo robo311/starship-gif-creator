@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # max_colors, dither, bayer_scale, gifsicle lossy level
 PRESETS: dict[str, dict] = {
@@ -14,6 +16,17 @@ PRESETS: dict[str, dict] = {
 }
 
 DITHERS = ("none", "bayer", "sierra2", "sierra2_4a", "floyd_steinberg")
+
+# The same quality ladder for MP4, as x264 constant-quality levels: lower is
+# better and bigger. 18 is visually lossless for most footage.
+MP4_CRF: dict[str, int] = {"max": 18, "high": 21, "balanced": 24, "small": 28, "tiny": 32}
+# "Same as the source": low enough that the re-encode is indistinguishable,
+# with x264's slower search spending time instead of bits.
+MP4_SOURCE_CRF = 15
+
+MAX_SECONDS = 60
+MAX_SEGMENTS = 20
+MAX_TRACK_POINTS = 600
 
 
 class Crop(BaseModel):
@@ -36,6 +49,35 @@ class Crop(BaseModel):
         )
 
 
+class Zoom(BaseModel):
+    """A steady push in or pull out across a clip, centred on the framed region."""
+
+    direction: Literal["in", "out"] = "in"
+    amount: float = Field(default=1.3, ge=1.05, le=3.0)
+
+
+class TrackPoint(BaseModel):
+    """Where a followed target was: source seconds, and the crop's centre in 0..1."""
+
+    t: float = Field(ge=0)
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class Segment(BaseModel):
+    """One stretch of the source, in seconds. A sequence plays them in list order.
+
+    Each part frames its own region of the source (no crop means the whole
+    frame), may zoom, and may move its crop along a followed target's path.
+    """
+
+    start: float = Field(ge=0)
+    duration: float = Field(gt=0, le=MAX_SECONDS)
+    crop: Crop | None = None
+    zoom: Zoom | None = None
+    track: list[TrackPoint] = Field(default_factory=list, max_length=MAX_TRACK_POINTS)
+
+
 class VideoMeta(BaseModel):
     id: str
     provider: str = ""
@@ -53,12 +95,16 @@ class RenderSpec(BaseModel):
     """Everything needed to turn a cached video into one GIF."""
 
     video_id: str
+    format: Literal["gif", "mp4"] = "gif"
     start: float = Field(default=0.0, ge=0)
-    duration: float = Field(default=3.0, gt=0, le=60)
-    fps: int = Field(default=15, ge=1, le=50)
-    width: int = Field(default=480, ge=16, le=1920)
-    height: int = Field(default=270, ge=16, le=1920)
+    duration: float = Field(default=3.0, gt=0, le=MAX_SECONDS)
+    fps: int = Field(default=15, ge=1, le=60)
+    # Up to 4K, so a 1440p (or larger) source can be exported at full size.
+    width: int = Field(default=480, ge=16, le=3840)
+    height: int = Field(default=270, ge=16, le=3840)
     crop: Crop | None = None
+    zoom: Zoom | None = None
+    track: list[TrackPoint] = Field(default_factory=list, max_length=MAX_TRACK_POINTS)
     preset: str = "balanced"
     dedupe: bool = False
     speed: float = Field(default=1.0, ge=0.25, le=4.0)
@@ -70,6 +116,45 @@ class RenderSpec(BaseModel):
     dither: str | None = None
     bayer_scale: int | None = Field(default=None, ge=0, le=5)
     lossy: int | None = Field(default=None, ge=0, le=300)
+    # MP4 only: a fixed video bitrate, used to hit a file size; quality-based otherwise.
+    bitrate_kbps: int | None = Field(default=None, ge=50, le=100_000)
+    # MP4 only: "source" encodes near-lossless instead of following the preset.
+    mp4_quality: Literal["ladder", "source"] = "ladder"
+    # MP4 only: an explicit x264 quality level, chosen in the page's MP4 group;
+    # when absent, the GIF preset ladder is mapped onto MP4_CRF instead.
+    mp4_crf: int | None = Field(default=None, ge=0, le=51)
+    # Filled in by the server from the source file, never by the page: the
+    # source's true frame rate, which "source" quality keeps exactly.
+    source_fps: float | None = Field(default=None, gt=0, le=1000)
+    # Several parts of the source joined in this order. Empty means the single
+    # clip described by `start` and `duration`.
+    segments: list[Segment] = Field(default_factory=list, max_length=MAX_SEGMENTS)
+
+    @model_validator(mode="after")
+    def _sequence_sets_the_clip(self) -> "RenderSpec":
+        """With a sequence, `start` and `duration` describe it as a whole.
+
+        Everything downstream that only reads `duration` — the size estimate,
+        the fit search — then sees the real length of the joined GIF.
+        """
+        if self.segments:
+            total = sum(segment.duration for segment in self.segments)
+            if total > MAX_SECONDS:
+                raise ValueError(f"the parts add up to {total:.1f} s; the limit is {MAX_SECONDS} s")
+            self.start = self.segments[0].start
+            self.duration = round(total, 3)
+            if len(self.segments) == 1:
+                # A lone part is an ordinary clip, framed the way that part is.
+                only = self.segments[0]
+                self.crop, self.zoom, self.track = only.crop, only.zoom, only.track
+        return self
+
+    def clips(self) -> list[Segment]:
+        """The source ranges to encode, in playback order."""
+        return self.segments or [Segment(
+            start=self.start, duration=self.duration,
+            crop=self.crop, zoom=self.zoom, track=self.track,
+        )]
 
     @field_validator("preset")
     @classmethod
@@ -114,6 +199,7 @@ class RenderSpec(BaseModel):
 
 class RenderResult(BaseModel):
     name: str
+    format: str = "gif"
     gif_url: str
     bytes: int
     width: int

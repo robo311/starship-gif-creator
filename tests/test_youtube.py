@@ -201,3 +201,32 @@ def test_percent_parsing_survives_yt_dlp_oddities():
     assert youtube._parse_percent("100.0%") == 1.0
     assert youtube._parse_percent("NA") == 0.0
     assert youtube._parse_percent("") == 0.0
+
+
+def test_above_1080p_the_selector_prefers_vp9_over_h264():
+    selector = youtube.format_selector(1440)
+    assert selector.startswith("bv*[vcodec^=vp09][height<=?1440]")
+    assert selector.index("vp09") < selector.index("avc1")
+    assert selector.endswith("/b")
+
+
+def test_up_to_1080p_h264_still_comes_first():
+    assert youtube.format_selector(1080).startswith("bv*[vcodec^=avc1]")
+
+
+def test_the_cache_answers_only_requests_it_can_meet(tmp_path):
+    import json
+    video = tmp_path / "abcdefghijk.mp4"
+    video.write_bytes(b"x")
+    (tmp_path / "abcdefghijk.json").write_text(json.dumps({"max_height": 1080}))
+    assert sources.cache_satisfies(tmp_path, "abcdefghijk", video, 720)
+    assert sources.cache_satisfies(tmp_path, "abcdefghijk", video, 1080)
+    assert not sources.cache_satisfies(tmp_path, "abcdefghijk", video, 1440)
+
+
+def test_an_old_cache_entry_is_judged_by_its_real_height(cache_dir, synthetic_video):
+    from .conftest import SYNTHETIC_ID
+
+    # The synthetic clip is 240 px tall and its sidecar never recorded a quality.
+    assert sources.cache_satisfies(cache_dir / "videos", SYNTHETIC_ID, synthetic_video, 240)
+    assert not sources.cache_satisfies(cache_dir / "videos", SYNTHETIC_ID, synthetic_video, 720)

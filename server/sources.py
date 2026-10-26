@@ -142,8 +142,25 @@ def validate_url(url: str) -> None:
         raise DownloadError("Paste a valid video-page URL.")
 
 
+# Above this height YouTube offers no H.264 at all, only VP9 and AV1.
+H264_CEILING = 1080
+
+
 def format_selector(max_height: int) -> str:
-    """Prefer H.264 in MP4 — VP9/AV1 will not play in every browser."""
+    """Prefer H.264 in MP4 — VP9/AV1 will not play in every browser.
+
+    Above 1080p that preference would quietly hand back 1080p, because H.264
+    stops there. So a higher request prefers VP9, which every Chromium browser
+    and Firefox play, then H.264, then whatever exists.
+    """
+    if max_height > H264_CEILING:
+        return (
+            f"bv*[vcodec^=vp09][height<=?{max_height}]+ba/"
+            f"bv*[vcodec^=vp9][height<=?{max_height}]+ba/"
+            f"bv*[vcodec^=avc1][height<=?{max_height}]+ba[ext=m4a]/"
+            f"bv*[height<=?{max_height}]+ba/"
+            f"b[height<=?{max_height}]/b"
+        )
     return (
         f"bv*[vcodec^=avc1][height<=?{max_height}]+ba[ext=m4a]/"
         f"b[vcodec^=avc1][height<=?{max_height}]/"
@@ -235,6 +252,26 @@ def _friendly_access_error(url: str, details: str = "") -> str:
     )
 
 
+def cache_satisfies(cache_dir: Path, source_id: str, path: Path, max_height: int) -> bool:
+    """Whether the cached file was fetched at, or above, the quality asked for.
+
+    The sidecar records the quality that was requested. Files cached before it
+    did are judged by their actual height, so an old 480p download is not
+    served to someone asking for 1080p.
+    """
+    fetched = _read_sidecar(cache_dir, source_id).get("max_height")
+    if not fetched:
+        fetched = media.probe(path).height
+    return int(fetched) >= max_height
+
+
+def _drop_cached(cache_dir: Path, source_id: str) -> None:
+    """Remove a cached download so a better one can take its place."""
+    for path in cache_dir.glob(f"{source_id}.*"):
+        if path.suffix.lower() in (".mp4", ".mkv", ".webm", ".part"):
+            path.unlink(missing_ok=True)
+
+
 def _meta_from(cache_dir: Path, source_id: str, path: Path, extra: dict) -> VideoMeta:
     info = media.probe(path)
     stored = _read_sidecar(cache_dir, source_id)
@@ -281,7 +318,7 @@ def load(
     cached_id = parse_source_id(url)
     if cached_id:
         existing = cached_video(cache_dir, cached_id)
-        if existing:
+        if existing and cache_satisfies(cache_dir, cached_id, existing, max_height):
             progress(100, "Loaded from cache")
             return _meta_from(cache_dir, cached_id, existing, {})
 
@@ -292,11 +329,15 @@ def load(
     info["_starship_provider"] = provider
 
     existing = cached_video(cache_dir, resolved_id)
-    if existing:
+    if existing and cache_satisfies(cache_dir, resolved_id, existing, max_height):
         progress(100, "Loaded from cache")
         return _meta_from(cache_dir, resolved_id, existing, info)
+    if existing:
+        # Cached at a lower quality than asked for: fetch the better one instead.
+        _drop_cached(cache_dir, resolved_id)
 
     _sidecar(cache_dir, resolved_id).write_text(json.dumps({
+        "max_height": max_height,
         "provider": provider,
         "title": info.get("title") or resolved_id,
         "url": info.get("webpage_url") or url,

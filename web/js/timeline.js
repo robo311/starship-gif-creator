@@ -19,8 +19,8 @@ const MIN_VIEW = 0.5;       // never zoom in tighter than half a second
 const FIT_MARGIN = 0.35;    // context to keep around the clip when fitting
 
 export function initTimeline({
-  track, sel, handleIn, handleOut, playhead, scrub, viewLabel,
-  getDuration, getRange, setRange, seek,
+  track, sel, handleIn, handleOut, playhead, scrub, viewLabel, marks,
+  getDuration, getRange, setRange, seek, getMarks = () => [],
 }) {
   let dragging = null;
   let grabOffset = 0;        // seconds from the clip's start to where it was grabbed
@@ -197,12 +197,34 @@ export function initTimeline({
     }
 
     playhead.style.left = percent(fractionOf(currentTime));
+    if (marks) renderMarks();
 
     if (viewLabel) {
       viewLabel.textContent = view.duration > 0
         ? `showing ${viewStart().toFixed(1)}–${(viewStart() + viewDuration()).toFixed(1)} s of ${whole.toFixed(1)} s · scroll to zoom, shift-scroll to pan`
         : `showing the whole ${whole.toFixed(1)} s · scroll to zoom`;
     }
+  }
+
+  /** Ghosts of the sequence's parts, numbered in playback order. */
+  function renderMarks() {
+    const wanted = getMarks();
+    while (marks.children.length > wanted.length) marks.lastChild.remove();
+    while (marks.children.length < wanted.length) {
+      const mark = document.createElement('div');
+      mark.className = 'part-mark';
+      mark.append(document.createElement('b'));
+      marks.append(mark);
+    }
+    wanted.forEach(({ start, end, label, active }, index) => {
+      const mark = marks.children[index];
+      const left = Math.max(-0.02, fractionOf(start));
+      const right = Math.min(1.02, fractionOf(end));
+      mark.style.left = `${left * 100}%`;
+      mark.style.width = `${Math.max(0, right - left) * 100}%`;
+      mark.classList.toggle('active', Boolean(active));
+      mark.firstChild.textContent = label;
+    });
   }
 
   return { render, fitClip, MIN_CLIP, MAX_CLIP };

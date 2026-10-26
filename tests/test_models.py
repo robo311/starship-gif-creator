@@ -60,3 +60,8 @@ def test_duration_bounds_are_enforced():
         RenderSpec(video_id="abc", duration=0)
     with pytest.raises(ValidationError):
         RenderSpec(video_id="abc", duration=61)
+
+
+def test_a_sequence_longer_than_a_minute_is_rejected():
+    with pytest.raises(ValidationError):
+        RenderSpec(video_id="abc", segments=[{"start": i * 40, "duration": 31} for i in range(2)])
